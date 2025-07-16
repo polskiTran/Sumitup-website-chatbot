@@ -1,6 +1,6 @@
 /**
  * PocketFlow Chatbot - Standalone Embeddable Chatbot
- * 
+ *
  * Usage:
  * <script src="chatbot.js"></script>
  * <script>
@@ -20,96 +20,116 @@
  */
 
 function initializeChatbot(config) {
-    const {
-        current_url = '',
-        extra_urls = [],
-        prefixes = [],
-        chatbotName = 'PocketFlow Website Chatbot',
-        wsUrl = '/api/ws/chat',
-        instruction = '',
-        isOpen = false,
-        theme = 'auto'
-    } = config;
+  const {
+    current_url = "",
+    extra_urls = [],
+    prefixes = [],
+    chatbotName = "PocketFlow Website Chatbot",
+    wsUrl = "/api/ws/chat",
+    instruction = "",
+    isOpen = false,
+    theme = "auto",
+  } = config;
 
-    // Store original config for URL updates
-    window._pocketflowOriginalConfig = config;
+  // Store original config for URL updates
+  window._pocketflowOriginalConfig = config;
 
-    // Track if current_url was explicitly provided
-    const wasCurrentUrlProvided = Boolean(current_url);
+  // Track if current_url was explicitly provided
+  const wasCurrentUrlProvided = Boolean(current_url);
 
-    // Handle current_url being empty - use current page URL
-    let finalCurrentUrl = current_url;
-    if (!finalCurrentUrl) {
-        finalCurrentUrl = window.location.href;
+  // Handle current_url being empty - use current page URL
+  let finalCurrentUrl = current_url;
+  if (!finalCurrentUrl) {
+    finalCurrentUrl = window.location.href;
+  }
+
+  // Theme detection and configuration
+  let currentTheme = "light"; // Default theme
+
+  // Simplified theme detection
+  function detectTheme() {
+    if (theme === "light" || theme === "dark") return theme;
+
+    const html = document.documentElement;
+    const body = document.body;
+
+    // Check common theme attributes and classes
+    const themeChecks = [
+      () => html.getAttribute("data-theme"),
+      () => html.getAttribute("data-color-scheme"),
+      () => html.getAttribute("data-bs-theme"),
+      () =>
+        ["dark", "dark-theme", "theme-dark", "dark-mode"].find((cls) =>
+          html.classList.contains(cls)
+        )
+          ? "dark"
+          : null,
+      () =>
+        ["dark", "dark-theme", "theme-dark", "dark-mode"].find((cls) =>
+          body.classList.contains(cls)
+        )
+          ? "dark"
+          : null,
+      () =>
+        window.matchMedia?.("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : null,
+    ];
+
+    for (const check of themeChecks) {
+      const result = check();
+      if (result === "dark") return "dark";
+      if (result === "light") return "light";
     }
 
-    // Theme detection and configuration
-    let currentTheme = 'light'; // Default theme
+    return "light";
+  }
 
-    // Simplified theme detection
-    function detectTheme() {
-        if (theme === 'light' || theme === 'dark') return theme;
+  // Update chatbot theme
+  function updateChatbotTheme(newTheme) {
+    currentTheme = newTheme;
+    const elements = [
+      document.getElementById("pocketflow-chat-icon"),
+      document.getElementById("pocketflow-chat-window"),
+    ];
 
-        const html = document.documentElement;
-        const body = document.body;
-        
-        // Check common theme attributes and classes
-        const themeChecks = [
-            () => html.getAttribute('data-theme'),
-            () => html.getAttribute('data-color-scheme'),
-            () => html.getAttribute('data-bs-theme'),
-            () => ['dark', 'dark-theme', 'theme-dark', 'dark-mode'].find(cls => html.classList.contains(cls)) ? 'dark' : null,
-            () => ['dark', 'dark-theme', 'theme-dark', 'dark-mode'].find(cls => body.classList.contains(cls)) ? 'dark' : null,
-            () => window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : null
-        ];
+    elements.forEach((el) => el?.setAttribute("data-chatbot-theme", newTheme));
+  }
 
-        for (const check of themeChecks) {
-            const result = check();
-            if (result === 'dark') return 'dark';
-            if (result === 'light') return 'light';
-        }
+  // Watch for theme changes
+  function setupThemeObserver() {
+    const checkThemeChange = () => {
+      const newTheme = detectTheme();
+      if (newTheme !== currentTheme) {
+        updateChatbotTheme(newTheme);
+      }
+    };
 
-        return 'light';
-    }
+    // Watch for attribute and class changes
+    const observer = new MutationObserver(checkThemeChange);
+    [document.documentElement, document.body].forEach((el) => {
+      observer.observe(el, {
+        attributes: true,
+        attributeFilter: [
+          "data-theme",
+          "data-color-scheme",
+          "data-bs-theme",
+          "class",
+        ],
+      });
+    });
 
-    // Update chatbot theme
-    function updateChatbotTheme(newTheme) {
-        currentTheme = newTheme;
-        const elements = [
-            document.getElementById('pocketflow-chat-icon'),
-            document.getElementById('pocketflow-chat-window')
-        ];
-        
-        elements.forEach(el => el?.setAttribute('data-chatbot-theme', newTheme));
-    }
+    // Watch system theme changes
+    window
+      .matchMedia?.("(prefers-color-scheme: dark)")
+      .addEventListener("change", checkThemeChange);
+  }
 
-    // Watch for theme changes
-    function setupThemeObserver() {
-        const checkThemeChange = () => {
-            const newTheme = detectTheme();
-            if (newTheme !== currentTheme) {
-                updateChatbotTheme(newTheme);
-            }
-        };
+  // Detect initial theme
+  currentTheme = detectTheme();
 
-        // Watch for attribute and class changes
-        const observer = new MutationObserver(checkThemeChange);
-        [document.documentElement, document.body].forEach(el => {
-            observer.observe(el, { 
-                attributes: true, 
-                attributeFilter: ['data-theme', 'data-color-scheme', 'data-bs-theme', 'class'] 
-            });
-        });
-
-        // Watch system theme changes
-        window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', checkThemeChange);
-    }
-
-    // Detect initial theme
-    currentTheme = detectTheme();
-
-    // Inject CSS styles
-    const chatbotStyles = `
+  // Inject CSS styles
+  const chatbotStyles = `
         /* --- CHATBOT THEME VARIABLES --- */
         :root, html[data-theme="light"] {
             --chatbot-background: hsl(0 0% 100%);
@@ -588,47 +608,50 @@ function initializeChatbot(config) {
         }
     `;
 
-    // Inject styles into document
-    const styleElement = document.createElement('style');
-    styleElement.textContent = chatbotStyles;
-    document.head.appendChild(styleElement);
+  // Inject styles into document
+  const styleElement = document.createElement("style");
+  styleElement.textContent = chatbotStyles;
+  document.head.appendChild(styleElement);
 
-    // Load external resources
-    const loadResource = (url, type = 'script') => {
-        const selector = type === 'script' ? `script[src="${url}"]` : `link[href="${url}"]`;
-        if (document.querySelector(selector)) return Promise.resolve();
-        
-        return new Promise(resolve => {
-            const element = document.createElement(type === 'script' ? 'script' : 'link');
-            if (type === 'script') {
-                element.src = url;
-            } else {
-                element.rel = 'stylesheet';
-                element.href = url;
-            }
-            element.onload = resolve;
-            element.onerror = () => {
-                console.warn(`Failed to load ${type}: ${url}`);
-                resolve(); // Continue anyway
-            };
-            document.head.appendChild(element);
-        });
-    };
+  // Load external resources
+  const loadResource = (url, type = "script") => {
+    const selector =
+      type === "script" ? `script[src="${url}"]` : `link[href="${url}"]`;
+    if (document.querySelector(selector)) return Promise.resolve();
 
-    // Create chat HTML elements
-    function createChatElements() {
-        // Create chat icon
-        const chatIcon = document.createElement('div');
-        chatIcon.id = 'pocketflow-chat-icon';
-        chatIcon.innerHTML = `
+    return new Promise((resolve) => {
+      const element = document.createElement(
+        type === "script" ? "script" : "link"
+      );
+      if (type === "script") {
+        element.src = url;
+      } else {
+        element.rel = "stylesheet";
+        element.href = url;
+      }
+      element.onload = resolve;
+      element.onerror = () => {
+        console.warn(`Failed to load ${type}: ${url}`);
+        resolve(); // Continue anyway
+      };
+      document.head.appendChild(element);
+    });
+  };
+
+  // Create chat HTML elements
+  function createChatElements() {
+    // Create chat icon
+    const chatIcon = document.createElement("div");
+    chatIcon.id = "pocketflow-chat-icon";
+    chatIcon.innerHTML = `
             <svg class="light-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"></path></svg>
             <svg class="dark-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"></path></svg>
         `;
 
-        // Create chat window
-        const chatWindow = document.createElement('div');
-        chatWindow.id = 'pocketflow-chat-window';
-        chatWindow.innerHTML = `
+    // Create chat window
+    const chatWindow = document.createElement("div");
+    chatWindow.id = "pocketflow-chat-window";
+    chatWindow.innerHTML = `
             <div id="pocketflow-chat-header">
                 <button id="pocketflow-chat-maximize-button" class="pocketflow-chat-header-button" aria-label="Maximize chat">
                     <svg class="icon-maximize" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
@@ -676,521 +699,605 @@ function initializeChatbot(config) {
             </div>
         `;
 
-        // Append elements to body
-        document.body.appendChild(chatIcon);
-        document.body.appendChild(chatWindow);
+    // Append elements to body
+    document.body.appendChild(chatIcon);
+    document.body.appendChild(chatWindow);
 
-        // Setup theme detection and observer
-        setupThemeObserver();
-        updateChatbotTheme(currentTheme);
+    // Setup theme detection and observer
+    setupThemeObserver();
+    updateChatbotTheme(currentTheme);
 
-        return { chatIcon, chatWindow };
-    }
+    return { chatIcon, chatWindow };
+  }
 
-    // Initialize libraries and create chatbot
-    Promise.all([
-        loadResource('https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js'),
-        loadResource('https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js'),
-        loadResource('https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js'),
-        loadResource('https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css', 'css')
-    ]).then(() => {
-        console.log('Chatbot dependencies loaded successfully');
-        
-        // Initialize libraries
-        if (window.mermaid) {
-            try {
-                window.mermaid.initialize({ 
-                    startOnLoad: false,
-                    theme: 'default',
-                    securityLevel: 'loose'
-                });
-                console.log('Mermaid initialized');
-            } catch (error) {
-                console.warn('Failed to initialize Mermaid:', error);
-            }
-        } else {
-            console.warn('Mermaid library not available');
+  // Initialize libraries and create chatbot
+  Promise.all([
+    loadResource("https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"),
+    loadResource(
+      "https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"
+    ),
+    loadResource(
+      "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"
+    ),
+    loadResource(
+      "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css",
+      "css"
+    ),
+  ])
+    .then(() => {
+      console.log("Chatbot dependencies loaded successfully");
+
+      // Initialize libraries
+      if (window.mermaid) {
+        try {
+          window.mermaid.initialize({
+            startOnLoad: false,
+            theme: "default",
+            securityLevel: "loose",
+          });
+          console.log("Mermaid initialized");
+        } catch (error) {
+          console.warn("Failed to initialize Mermaid:", error);
         }
+      } else {
+        console.warn("Mermaid library not available");
+      }
 
-        if (window.marked) {
-            try {
-                if (window.hljs) {
-                    window.marked.setOptions({
-                        highlight: function(code, lang) {
-                            if (lang && window.hljs.getLanguage(lang)) {
-                                try {
-                                    return window.hljs.highlight(code, { language: lang }).value;
-                                } catch (err) {}
-                            }
-                            try {
-                                return window.hljs.highlightAuto(code).value;
-                            } catch (err) {}
-                            return code;
-                        },
-                        langPrefix: 'hljs language-'
-                    });
-                    console.log('Marked with highlight.js initialized');
-                } else {
-                    console.warn('highlight.js not available, using basic marked');
+      if (window.marked) {
+        try {
+          if (window.hljs) {
+            window.marked.setOptions({
+              highlight: function (code, lang) {
+                if (lang && window.hljs.getLanguage(lang)) {
+                  try {
+                    return window.hljs.highlight(code, { language: lang })
+                      .value;
+                  } catch (err) {}
                 }
-            } catch (error) {
-                console.warn('Failed to initialize Marked:', error);
-            }
-        } else {
-            console.warn('Marked library not available');
+                try {
+                  return window.hljs.highlightAuto(code).value;
+                } catch (err) {}
+                return code;
+              },
+              langPrefix: "hljs language-",
+            });
+            console.log("Marked with highlight.js initialized");
+          } else {
+            console.warn("highlight.js not available, using basic marked");
+          }
+        } catch (error) {
+          console.warn("Failed to initialize Marked:", error);
         }
+      } else {
+        console.warn("Marked library not available");
+      }
 
-        // Create chat elements
+      // Create chat elements
+      const { chatIcon, chatWindow } = createChatElements();
+
+      // Update welcome message with current URL
+      const welcomeMessage = document.getElementById(
+        "pocketflow-chat-welcome-message"
+      );
+      welcomeMessage.innerHTML = `Welcome! I'm here to help you with questions about: <a href="${finalCurrentUrl}" target="_blank" style="color: var(--chatbot-primary); text-decoration: none;">${finalCurrentUrl}</a>. What would you like to know?`;
+
+      // Initialize chatbot functionality
+      initializeChatbotLogic(
+        finalCurrentUrl,
+        extra_urls,
+        prefixes,
+        chatbotName,
+        wsUrl,
+        instruction,
+        isOpen,
+        wasCurrentUrlProvided
+      );
+    })
+    .catch((error) => {
+      console.error("Failed to load chatbot dependencies:", error);
+      // Still try to create a basic chatbot without external libraries
+      try {
         const { chatIcon, chatWindow } = createChatElements();
-
-        // Update welcome message with current URL
-        const welcomeMessage = document.getElementById('pocketflow-chat-welcome-message');
+        const welcomeMessage = document.getElementById(
+          "pocketflow-chat-welcome-message"
+        );
         welcomeMessage.innerHTML = `Welcome! I'm here to help you with questions about: <a href="${finalCurrentUrl}" target="_blank" style="color: var(--chatbot-primary); text-decoration: none;">${finalCurrentUrl}</a>. What would you like to know?`;
 
-        // Initialize chatbot functionality
-        initializeChatbotLogic(finalCurrentUrl, extra_urls, prefixes, chatbotName, wsUrl, instruction, isOpen, wasCurrentUrlProvided);
-    }).catch(error => {
-        console.error('Failed to load chatbot dependencies:', error);
-        // Still try to create a basic chatbot without external libraries
-        try {
-            const { chatIcon, chatWindow } = createChatElements();
-            const welcomeMessage = document.getElementById('pocketflow-chat-welcome-message');
-            welcomeMessage.innerHTML = `Welcome! I'm here to help you with questions about: <a href="${finalCurrentUrl}" target="_blank" style="color: var(--chatbot-primary); text-decoration: none;">${finalCurrentUrl}</a>. What would you like to know?`;
-            
-            initializeChatbotLogic(finalCurrentUrl, extra_urls, prefixes, chatbotName, wsUrl, instruction, isOpen, wasCurrentUrlProvided);
-        } catch (fallbackError) {
-            console.error('Failed to create fallback chatbot:', fallbackError);
-        }
+        initializeChatbotLogic(
+          finalCurrentUrl,
+          extra_urls,
+          prefixes,
+          chatbotName,
+          wsUrl,
+          instruction,
+          isOpen,
+          wasCurrentUrlProvided
+        );
+      } catch (fallbackError) {
+        console.error("Failed to create fallback chatbot:", fallbackError);
+      }
     });
 
-    function initializeChatbotLogic(currentUrl, extraUrls, prefixes, chatbotName, wsUrl, instruction = '', isOpenByDefault = false, wasCurrentUrlProvided = false) {
-        // Get chat elements
-        const chatIcon = document.getElementById('pocketflow-chat-icon');
-        const chatWindow = document.getElementById('pocketflow-chat-window');
-        const chatMessages = document.getElementById('pocketflow-chat-messages');
-        const chatInput = document.getElementById('pocketflow-chat-input');
-        const sendButton = document.getElementById('pocketflow-chat-send-button');
-        const closeButton = document.getElementById('pocketflow-chat-close-button');
-        const maximizeButton = document.getElementById('pocketflow-chat-maximize-button');
-        const newConversationButton = document.getElementById('pocketflow-chat-new-conversation-button');
-        const typingIndicator = document.getElementById('pocketflow-typing-indicator');
-        const charCounter = document.getElementById('pocketflow-char-counter');
-        const connectionStatus = document.getElementById('pocketflow-connection-status');
+  function initializeChatbotLogic(
+    currentUrl,
+    extraUrls,
+    prefixes,
+    chatbotName,
+    wsUrl,
+    instruction = "",
+    isOpenByDefault = false,
+    wasCurrentUrlProvided = false
+  ) {
+    // Get chat elements
+    const chatIcon = document.getElementById("pocketflow-chat-icon");
+    const chatWindow = document.getElementById("pocketflow-chat-window");
+    const chatMessages = document.getElementById("pocketflow-chat-messages");
+    const chatInput = document.getElementById("pocketflow-chat-input");
+    const sendButton = document.getElementById("pocketflow-chat-send-button");
+    const closeButton = document.getElementById("pocketflow-chat-close-button");
+    const maximizeButton = document.getElementById(
+      "pocketflow-chat-maximize-button"
+    );
+    const newConversationButton = document.getElementById(
+      "pocketflow-chat-new-conversation-button"
+    );
+    const typingIndicator = document.getElementById(
+      "pocketflow-typing-indicator"
+    );
+    const charCounter = document.getElementById("pocketflow-char-counter");
+    const connectionStatus = document.getElementById(
+      "pocketflow-connection-status"
+    );
 
-        // Chat state variables
-        let isChatOpen = isOpenByDefault; // Open by default if specified
-        let isChatMaximized = false; // Never start maximized, let user choose
-        let socket = null;
-        let isFirstMessage = true;
-        let hasPageChanged = false; // Track if page changed since last conversation
-        
+    // Chat state variables
+    let isChatOpen = isOpenByDefault; // Open by default if specified
+    let isChatMaximized = false; // Never start maximized, let user choose
+    let socket = null;
+    let isFirstMessage = true;
+    let hasPageChanged = false; // Track if page changed since last conversation
 
+    // Set initial state if opened by default
+    if (isOpenByDefault) {
+      isChatMaximized = true;
+      chatWindow.classList.add("open", "maximized");
 
-        // Set initial state if opened by default
-        if (isOpenByDefault) {
-            isChatMaximized = true;
-            chatWindow.classList.add('open', 'maximized');
-            
-            const [iconMax, iconMin] = ['icon-maximize', 'icon-minimize'].map(cls => maximizeButton.querySelector(`.${cls}`));
-            iconMax.style.display = 'none';
-            iconMin.style.display = 'block';
-            maximizeButton.setAttribute('aria-label', 'Restore chat');
-        }
-
-        // Auto-resize textarea and update character counter
-        chatInput.addEventListener('input', () => {
-            chatInput.style.height = 'auto';
-            const newHeight = Math.min(chatInput.scrollHeight, 120);
-            chatInput.style.height = newHeight + 'px';
-            
-            // Ensure overflow is always hidden to prevent scrollbars
-            chatInput.style.overflow = 'hidden';
-            
-            const currentLength = chatInput.value.length;
-            charCounter.textContent = `${currentLength}/1000`;
-            
-            charCounter.classList.remove('warning', 'error');
-            if (currentLength > 900) {
-                charCounter.classList.add('error');
-            } else if (currentLength > 800) {
-                charCounter.classList.add('warning');
-            }
-            
-            if (!chatInput.disabled) {
-                sendButton.disabled = currentLength > 1000 || currentLength === 0;
-            }
-        });
-
-        // Connection status management
-        function setStatus(status) { // 'connecting', 'connected', 'disconnected'
-            if(connectionStatus) {
-                connectionStatus.className = `pocketflow-status-${status}`;
-            }
-        }
-        
-        // Chat window toggle functionality
-        function toggleChat(forceOpen = null) {
-            isChatOpen = forceOpen !== null ? forceOpen : !isChatOpen;
-            chatWindow.classList.toggle('open', isChatOpen);
-            if (isChatOpen) {
-                chatInput.focus();
-                connectWebSocket(); 
-            } else {
-                // When closing, also un-maximize and reset state
-                if (isChatMaximized) {
-                    isChatMaximized = false;
-                    chatWindow.classList.remove('maximized');
-                    const iconMax = maximizeButton.querySelector('.icon-maximize');
-                    const iconMin = maximizeButton.querySelector('.icon-minimize');
-                    iconMax.style.display = 'block';
-                    iconMin.style.display = 'none';
-                    maximizeButton.setAttribute('aria-label', 'Maximize chat');
-                }
-                // Keep WebSocket connection alive when closing UI
-                // User can continue their session when reopening
-            }
-        }
-
-        // Chat window maximize/minimize functionality
-        function toggleMaximize() {
-            isChatMaximized = !isChatMaximized;
-            chatWindow.classList.toggle('maximized', isChatMaximized);
-            const iconMax = maximizeButton.querySelector('.icon-maximize');
-            const iconMin = maximizeButton.querySelector('.icon-minimize');
-            iconMax.style.display = isChatMaximized ? 'none' : 'block';
-            iconMin.style.display = isChatMaximized ? 'block' : 'none';
-            maximizeButton.setAttribute('aria-label', isChatMaximized ? 'Restore chat' : 'Maximize chat');
-        }
-
-        // Function to render markdown with mermaid diagrams
-        async function renderMarkdownWithMermaid(markdownText) {
-            // If no markdown library available, return plain text
-            if (!window.marked) {
-                console.warn('Marked library not available, returning plain text');
-                return markdownText.replace(/\n/g, '<br>');
-            }
-            
-            try {
-                let html = window.marked.parse(markdownText);
-                
-                // Only try mermaid if library is available
-                if (window.mermaid) {
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = html;
-                    
-                    const mermaidBlocks = tempDiv.querySelectorAll('code.language-mermaid');
-                    for (let i = 0; i < mermaidBlocks.length; i++) {
-                        const block = mermaidBlocks[i];
-                        const mermaidCode = block.textContent;
-                        
-                        try {
-                            const diagramId = `mermaid-diagram-${Date.now()}-${i}`;
-                            const { svg } = await window.mermaid.render(diagramId, mermaidCode);
-                            
-                            const svgContainer = document.createElement('div');
-                            svgContainer.className = 'pocketflow-mermaid-diagram';
-                            svgContainer.innerHTML = svg;
-                            
-                            const preElement = block.closest('pre');
-                            if (preElement) {
-                                preElement.parentNode.replaceChild(svgContainer, preElement);
-                            }
-                        } catch (error) {
-                            console.error('Mermaid rendering error:', error);
-                            block.textContent = `Error rendering diagram: ${error.message}\n\n${mermaidCode}`;
-                        }
-                    }
-                    
-                    return tempDiv.innerHTML;
-                }
-                
-                return html;
-            } catch (error) {
-                console.error('Markdown rendering error:', error);
-                return markdownText.replace(/\n/g, '<br>');
-            }
-        }
-
-        // Message management functions
-        function addMessage(content, isUser = false, isSystem = false) {
-            const messageElement = document.createElement('div');
-            if (isSystem) {
-                messageElement.classList.add('pocketflow-message', 'system');
-            } else {
-                messageElement.classList.add('pocketflow-message', isUser ? 'user' : 'bot');
-            }
-            messageElement.innerHTML = content;
-            
-            chatMessages.appendChild(messageElement);
-            const clearDiv = document.createElement('div');
-            clearDiv.style.clear = 'both';
-            chatMessages.appendChild(clearDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        function showTyping() { 
-            typingIndicator.classList.add('active'); 
-            chatMessages.scrollTop = chatMessages.scrollHeight; 
-        }
-        
-        function hideTyping() { 
-            typingIndicator.classList.remove('active'); 
-        }
-
-        function clearChatHistory() {
-            // Keep only the context banner and welcome message
-            const contextBanner = document.getElementById('pocketflow-chat-context-banner');
-            const welcomeMessage = document.querySelector('.pocketflow-message.bot');
-            
-            chatMessages.innerHTML = '';
-            if (contextBanner) chatMessages.appendChild(contextBanner);
-            if (welcomeMessage) chatMessages.appendChild(welcomeMessage);
-            
-            const clearDiv = document.createElement('div');
-            clearDiv.style.clear = 'both';
-            chatMessages.appendChild(clearDiv);
-        }
-
-        function startNewConversation() {
-            // Close existing WebSocket connection if any
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.close();
-            }
-            
-            // Clear chat history
-            clearChatHistory();
-            
-            // Reset conversation state
-            isFirstMessage = true;
-            hasPageChanged = false;
-            
-            // Hide typing indicator
-            hideTyping();
-            
-            // Re-enable input
-            chatInput.disabled = false;
-            sendButton.disabled = chatInput.value.trim().length === 0;
-            
-            // Add system message to indicate new conversation started
-            addMessage('New conversation started!', false, true);
-            
-            // Focus on input
-            chatInput.focus();
-            
-            // Reset connection status
-            setStatus('disconnected');
-        }
-
-        // WebSocket connection management
-        function connectWebSocket() {
-            if (socket && socket.readyState === WebSocket.OPEN) return;
-
-            setStatus('connecting');
-            socket = new WebSocket(wsUrl);
-
-            socket.onopen = () => {
-                console.log("WebSocket connected");
-                setStatus('connected');
-            };
-            
-            socket.onclose = () => {
-                console.log("WebSocket disconnected");
-                setStatus('disconnected');
-                hideTyping();
-                addMessage('Connection lost. Your next message will start a new conversation.', false, true);
-                isFirstMessage = true;
-                socket = null;
-                
-                chatInput.disabled = false;
-                sendButton.disabled = chatInput.value.trim().length === 0;
-            };
-            
-            socket.onerror = (error) => {
-                console.error("WebSocket error:", error);
-                setStatus('disconnected');
-                addMessage('A connection error occurred. Please refresh.', false, true);
-            };
-            
-            socket.onmessage = async (event) => {
-                const data = JSON.parse(event.data);
-                const enableInput = () => {
-                    chatInput.disabled = false;
-                    sendButton.disabled = chatInput.value.trim().length === 0;
-                    chatInput.focus();
-                };
-
-                switch (data.type) {
-                    case 'final_answer':
-                        hideTyping();
-                        const renderedHTML = await renderMarkdownWithMermaid(data.payload.trim());
-                        addMessage(renderedHTML, false);
-                        
-                        if (data.useful_pages?.length > 0) {
-                            const pagesHTML = '<strong>You may find these pages useful:</strong><ul>' + 
-                                data.useful_pages.map(p => `<li><a href="${p}" target="_blank" style="color: var(--chatbot-primary); text-decoration: none;">${p}</a></li>`).join('') + 
-                                '</ul>';
-                            addMessage(pagesHTML, false);
-                        }
-                        enableInput();
-                        break;
-                        
-                    case 'error':
-                        hideTyping();
-                        addMessage(`Sorry, an error occurred: ${data.payload}`, false);
-                        enableInput();
-                        break;
-                        
-                    case 'progress':
-                        hideTyping();
-                        addMessage(data.payload, false);
-                        showTyping();
-                        break;
-                }
-            };
-        }
-
-        // Message sending functionality
-        async function sendMessage() {
-            const message = chatInput.value.trim();
-            if (!message || sendButton.disabled || message.length > 1000) {
-                if (message.length > 1000) alert('Message is too long. Please keep it under 1000 characters.');
-                return;
-            }
-
-            // Handle page change scenario
-            if (hasPageChanged) {
-                // Clear history when starting new conversation after page change
-                clearChatHistory();
-                hasPageChanged = false;
-            } else if (isFirstMessage && chatMessages.children.length > 3) {
-                // Clear history if needed for regular first message
-                clearChatHistory();
-            }
-
-            // Update UI
-            addMessage(message, true);
-            chatInput.value = '';
-            chatInput.style.height = 'auto';
-            chatInput.dispatchEvent(new Event('input'));
-            
-            [sendButton, chatInput].forEach(el => el.disabled = true);
-            showTyping();
-            connectWebSocket();
-
-            // Prepare message data
-            const messageData = {
-                type: isFirstMessage ? "start" : "follow_up",
-                payload: {
-                    question: message,
-                    ...(isFirstMessage && {
-                        current_url: wasCurrentUrlProvided ? currentUrl : window.location.href,
-                        extra_urls: wasCurrentUrlProvided ? extraUrls : [],
-                        prefixes,
-                        instruction
-                    })
-                }
-            };
-
-            // Wait for connection and send
-            const waitForConnection = () => {
-                if (socket?.readyState === WebSocket.OPEN) {
-                    socket.send(JSON.stringify(messageData));
-                    if (isFirstMessage) isFirstMessage = false;
-                } else {
-                    setTimeout(waitForConnection, 5);
-                }
-            };
-            waitForConnection();
-        }
-
-        // Event listeners for chat functionality
-        chatIcon.addEventListener('click', () => toggleChat(true));
-        closeButton.addEventListener('click', () => toggleChat(false));
-        maximizeButton.addEventListener('click', toggleMaximize);
-        newConversationButton.addEventListener('click', startNewConversation);
-        sendButton.addEventListener('click', sendMessage);
-        
-        chatInput.addEventListener('keypress', (event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        });
-        
-        // Initialize character counter
-        chatInput.dispatchEvent(new Event('input'));
-        
-        // Connect WebSocket and focus input if opened by default
-        if (isOpenByDefault) {
-            connectWebSocket();
-            chatInput.focus();
-        }
-
-        // Function to handle page change
-        function handlePageChange(newUrl) {
-            // Update welcome message
-            const welcomeMessage = document.getElementById('pocketflow-chat-welcome-message');
-            if (welcomeMessage) {
-                welcomeMessage.innerHTML = `Welcome! I'm here to help you with questions about: <a href="${newUrl}" target="_blank" style="color: var(--chatbot-primary); text-decoration: none;">${newUrl}</a>. What would you like to know?`;
-            }
-            
-            // Check if there's existing chat history (more than just welcome messages)
-            const hasExistingHistory = chatMessages.children.length > 3; // context banner + welcome + clear div
-            
-            if (hasExistingHistory) {
-                // Don't clear history immediately, just add a system message and close WebSocket
-                addMessage(`Page changed to: ${newUrl}. Your next message will start a new conversation for this page.`, false, true);
-                
-                // Close WebSocket but don't clear history yet
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                    socket.close();
-                }
-                
-                // Mark that page has changed
-                hasPageChanged = true;
-                isFirstMessage = true; // Next message will be treated as first message
-            } else {
-                // No significant history, just update welcome message (already done above)
-                hasPageChanged = false;
-            }
-        }
-
-        // Set up automatic URL change detection for SPAs (only if current_url wasn't explicitly provided)
-        if (!wasCurrentUrlProvided) {
-            setupAutomaticUrlDetection(handlePageChange);
-        }
+      const [iconMax, iconMin] = ["icon-maximize", "icon-minimize"].map((cls) =>
+        maximizeButton.querySelector(`.${cls}`)
+      );
+      iconMax.style.display = "none";
+      iconMin.style.display = "block";
+      maximizeButton.setAttribute("aria-label", "Restore chat");
     }
+
+    // Auto-resize textarea and update character counter
+    chatInput.addEventListener("input", () => {
+      chatInput.style.height = "auto";
+      const newHeight = Math.min(chatInput.scrollHeight, 120);
+      chatInput.style.height = newHeight + "px";
+
+      // Ensure overflow is always hidden to prevent scrollbars
+      chatInput.style.overflow = "hidden";
+
+      const currentLength = chatInput.value.length;
+      charCounter.textContent = `${currentLength}/1000`;
+
+      charCounter.classList.remove("warning", "error");
+      if (currentLength > 900) {
+        charCounter.classList.add("error");
+      } else if (currentLength > 800) {
+        charCounter.classList.add("warning");
+      }
+
+      if (!chatInput.disabled) {
+        sendButton.disabled = currentLength > 1000 || currentLength === 0;
+      }
+    });
+
+    // Connection status management
+    function setStatus(status) {
+      // 'connecting', 'connected', 'disconnected'
+      if (connectionStatus) {
+        connectionStatus.className = `pocketflow-status-${status}`;
+      }
+    }
+
+    // Chat window toggle functionality
+    function toggleChat(forceOpen = null) {
+      isChatOpen = forceOpen !== null ? forceOpen : !isChatOpen;
+      chatWindow.classList.toggle("open", isChatOpen);
+      if (isChatOpen) {
+        chatInput.focus();
+        connectWebSocket();
+      } else {
+        // When closing, also un-maximize and reset state
+        if (isChatMaximized) {
+          isChatMaximized = false;
+          chatWindow.classList.remove("maximized");
+          const iconMax = maximizeButton.querySelector(".icon-maximize");
+          const iconMin = maximizeButton.querySelector(".icon-minimize");
+          iconMax.style.display = "block";
+          iconMin.style.display = "none";
+          maximizeButton.setAttribute("aria-label", "Maximize chat");
+        }
+        // Keep WebSocket connection alive when closing UI
+        // User can continue their session when reopening
+      }
+    }
+
+    // Chat window maximize/minimize functionality
+    function toggleMaximize() {
+      isChatMaximized = !isChatMaximized;
+      chatWindow.classList.toggle("maximized", isChatMaximized);
+      const iconMax = maximizeButton.querySelector(".icon-maximize");
+      const iconMin = maximizeButton.querySelector(".icon-minimize");
+      iconMax.style.display = isChatMaximized ? "none" : "block";
+      iconMin.style.display = isChatMaximized ? "block" : "none";
+      maximizeButton.setAttribute(
+        "aria-label",
+        isChatMaximized ? "Restore chat" : "Maximize chat"
+      );
+    }
+
+    // Function to render markdown with mermaid diagrams
+    async function renderMarkdownWithMermaid(markdownText) {
+      // If no markdown library available, return plain text
+      if (!window.marked) {
+        console.warn("Marked library not available, returning plain text");
+        return markdownText.replace(/\n/g, "<br>");
+      }
+
+      try {
+        let html = window.marked.parse(markdownText);
+
+        // Only try mermaid if library is available
+        if (window.mermaid) {
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = html;
+
+          const mermaidBlocks = tempDiv.querySelectorAll(
+            "code.language-mermaid"
+          );
+          for (let i = 0; i < mermaidBlocks.length; i++) {
+            const block = mermaidBlocks[i];
+            const mermaidCode = block.textContent;
+
+            try {
+              const diagramId = `mermaid-diagram-${Date.now()}-${i}`;
+              const { svg } = await window.mermaid.render(
+                diagramId,
+                mermaidCode
+              );
+
+              const svgContainer = document.createElement("div");
+              svgContainer.className = "pocketflow-mermaid-diagram";
+              svgContainer.innerHTML = svg;
+
+              const preElement = block.closest("pre");
+              if (preElement) {
+                preElement.parentNode.replaceChild(svgContainer, preElement);
+              }
+            } catch (error) {
+              console.error("Mermaid rendering error:", error);
+              block.textContent = `Error rendering diagram: ${error.message}\n\n${mermaidCode}`;
+            }
+          }
+
+          return tempDiv.innerHTML;
+        }
+
+        return html;
+      } catch (error) {
+        console.error("Markdown rendering error:", error);
+        return markdownText.replace(/\n/g, "<br>");
+      }
+    }
+
+    // Message management functions
+    function addMessage(content, isUser = false, isSystem = false) {
+      const messageElement = document.createElement("div");
+      if (isSystem) {
+        messageElement.classList.add("pocketflow-message", "system");
+      } else {
+        messageElement.classList.add(
+          "pocketflow-message",
+          isUser ? "user" : "bot"
+        );
+      }
+      messageElement.innerHTML = content;
+
+      chatMessages.appendChild(messageElement);
+      const clearDiv = document.createElement("div");
+      clearDiv.style.clear = "both";
+      chatMessages.appendChild(clearDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function showTyping() {
+      typingIndicator.classList.add("active");
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function hideTyping() {
+      typingIndicator.classList.remove("active");
+    }
+
+    function clearChatHistory() {
+      // Keep only the context banner and welcome message
+      const contextBanner = document.getElementById(
+        "pocketflow-chat-context-banner"
+      );
+      const welcomeMessage = document.querySelector(".pocketflow-message.bot");
+
+      chatMessages.innerHTML = "";
+      if (contextBanner) chatMessages.appendChild(contextBanner);
+      if (welcomeMessage) chatMessages.appendChild(welcomeMessage);
+
+      const clearDiv = document.createElement("div");
+      clearDiv.style.clear = "both";
+      chatMessages.appendChild(clearDiv);
+    }
+
+    function startNewConversation() {
+      // Close existing WebSocket connection if any
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      }
+
+      // Clear chat history
+      clearChatHistory();
+
+      // Reset conversation state
+      isFirstMessage = true;
+      hasPageChanged = false;
+
+      // Hide typing indicator
+      hideTyping();
+
+      // Re-enable input
+      chatInput.disabled = false;
+      sendButton.disabled = chatInput.value.trim().length === 0;
+
+      // Add system message to indicate new conversation started
+      addMessage("New conversation started!", false, true);
+
+      // Focus on input
+      chatInput.focus();
+
+      // Reset connection status
+      setStatus("disconnected");
+    }
+
+    // WebSocket connection management
+    function connectWebSocket() {
+      if (socket && socket.readyState === WebSocket.OPEN) return;
+
+      setStatus("connecting");
+      socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        console.log("WebSocket connected");
+        setStatus("connected");
+      };
+
+      socket.onclose = () => {
+        console.log("WebSocket disconnected");
+        setStatus("disconnected");
+        hideTyping();
+        addMessage(
+          "Connection lost. Your next message will start a new conversation.",
+          false,
+          true
+        );
+        isFirstMessage = true;
+        socket = null;
+
+        chatInput.disabled = false;
+        sendButton.disabled = chatInput.value.trim().length === 0;
+      };
+
+      socket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        setStatus("disconnected");
+        addMessage("A connection error occurred. Please refresh.", false, true);
+      };
+
+      socket.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
+        const enableInput = () => {
+          chatInput.disabled = false;
+          sendButton.disabled = chatInput.value.trim().length === 0;
+          chatInput.focus();
+        };
+
+        switch (data.type) {
+          case "final_answer":
+            hideTyping();
+            const renderedHTML = await renderMarkdownWithMermaid(
+              data.payload.trim()
+            );
+            addMessage(renderedHTML, false);
+
+            if (data.useful_pages?.length > 0) {
+              const pagesHTML =
+                "<strong>You may find these pages useful:</strong><ul>" +
+                data.useful_pages
+                  .map(
+                    (p) =>
+                      `<li><a href="${p}" target="_blank" style="color: var(--chatbot-primary); text-decoration: none;">${p}</a></li>`
+                  )
+                  .join("") +
+                "</ul>";
+              addMessage(pagesHTML, false);
+            }
+            enableInput();
+            break;
+
+          case "error":
+            hideTyping();
+            addMessage(`Sorry, an error occurred: ${data.payload}`, false);
+            enableInput();
+            break;
+
+          case "progress":
+            hideTyping();
+            addMessage(data.payload, false);
+            showTyping();
+            break;
+        }
+      };
+    }
+
+    // Message sending functionality
+    async function sendMessage() {
+      const message = chatInput.value.trim();
+      if (!message || sendButton.disabled || message.length > 1000) {
+        if (message.length > 1000)
+          alert("Message is too long. Please keep it under 1000 characters.");
+        return;
+      }
+
+      // Handle page change scenario
+      if (hasPageChanged) {
+        // Clear history when starting new conversation after page change
+        clearChatHistory();
+        hasPageChanged = false;
+      } else if (isFirstMessage && chatMessages.children.length > 3) {
+        // Clear history if needed for regular first message
+        clearChatHistory();
+      }
+
+      // Update UI
+      addMessage(message, true);
+      chatInput.value = "";
+      chatInput.style.height = "auto";
+      chatInput.dispatchEvent(new Event("input"));
+
+      [sendButton, chatInput].forEach((el) => (el.disabled = true));
+      showTyping();
+      connectWebSocket();
+
+      // Prepare message data
+      const messageData = {
+        type: isFirstMessage ? "start" : "follow_up",
+        payload: {
+          question: message,
+          ...(isFirstMessage && {
+            current_url: wasCurrentUrlProvided
+              ? currentUrl
+              : window.location.href,
+            extra_urls: wasCurrentUrlProvided ? extraUrls : [],
+            prefixes,
+            instruction,
+          }),
+        },
+      };
+
+      // Wait for connection and send
+      const waitForConnection = () => {
+        if (socket?.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify(messageData));
+          if (isFirstMessage) isFirstMessage = false;
+        } else {
+          setTimeout(waitForConnection, 5);
+        }
+      };
+      waitForConnection();
+    }
+
+    // Event listeners for chat functionality
+    chatIcon.addEventListener("click", () => toggleChat(true));
+    closeButton.addEventListener("click", () => toggleChat(false));
+    maximizeButton.addEventListener("click", toggleMaximize);
+    newConversationButton.addEventListener("click", startNewConversation);
+    sendButton.addEventListener("click", sendMessage);
+
+    chatInput.addEventListener("keypress", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Initialize character counter
+    chatInput.dispatchEvent(new Event("input"));
+
+    // Connect WebSocket and focus input if opened by default
+    if (isOpenByDefault) {
+      connectWebSocket();
+      chatInput.focus();
+    }
+
+    // Function to handle page change
+    function handlePageChange(newUrl) {
+      // Update welcome message
+      const welcomeMessage = document.getElementById(
+        "pocketflow-chat-welcome-message"
+      );
+      if (welcomeMessage) {
+        welcomeMessage.innerHTML = `Welcome! I'm here to help you with questions about: <a href="${newUrl}" target="_blank" style="color: var(--chatbot-primary); text-decoration: none;">${newUrl}</a>. What would you like to know?`;
+      }
+
+      // Check if there's existing chat history (more than just welcome messages)
+      const hasExistingHistory = chatMessages.children.length > 3; // context banner + welcome + clear div
+
+      if (hasExistingHistory) {
+        // Don't clear history immediately, just add a system message and close WebSocket
+        addMessage(
+          `Page changed to: ${newUrl}. Your next message will start a new conversation for this page.`,
+          false,
+          true
+        );
+
+        // Close WebSocket but don't clear history yet
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.close();
+        }
+
+        // Mark that page has changed
+        hasPageChanged = true;
+        isFirstMessage = true; // Next message will be treated as first message
+      } else {
+        // No significant history, just update welcome message (already done above)
+        hasPageChanged = false;
+      }
+    }
+
+    // Set up automatic URL change detection for SPAs (only if current_url wasn't explicitly provided)
+    if (!wasCurrentUrlProvided) {
+      setupAutomaticUrlDetection(handlePageChange);
+    }
+  }
 }
 
 // Set up URL change detection for SPAs
 function setupAutomaticUrlDetection(onPageChangeCallback) {
-    let currentUrl = window.location.href;
+  let currentUrl = window.location.href;
 
-    const handleUrlChange = () => {
-        const newUrl = window.location.href;
-        if (newUrl === currentUrl) return;
-        
-        currentUrl = newUrl;
-        
-        // Call the callback to handle page change
-        if (onPageChangeCallback) {
-            onPageChangeCallback(newUrl);
-        }
+  const handleUrlChange = () => {
+    const newUrl = window.location.href;
+    if (newUrl === currentUrl) return;
+
+    currentUrl = newUrl;
+
+    // Call the callback to handle page change
+    if (onPageChangeCallback) {
+      onPageChangeCallback(newUrl);
+    }
+  };
+
+  // Monitor navigation
+  ["pushState", "replaceState"].forEach((method) => {
+    const original = history[method];
+    history[method] = function (...args) {
+      original.apply(history, args);
+      setTimeout(handleUrlChange, 0);
     };
+  });
 
-    // Monitor navigation
-    ['pushState', 'replaceState'].forEach(method => {
-        const original = history[method];
-        history[method] = function(...args) {
-            original.apply(history, args);
-            setTimeout(handleUrlChange, 0);
-        };
-    });
-
-    ['popstate', 'hashchange'].forEach(event => {
-        window.addEventListener(event, handleUrlChange);
-    });
+  ["popstate", "hashchange"].forEach((event) => {
+    window.addEventListener(event, handleUrlChange);
+  });
 }
 
 // Make the function available globally
-window.initializeChatbot = initializeChatbot; 
+window.initializeChatbot = initializeChatbot;

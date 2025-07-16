@@ -91,3 +91,13 @@ coverage/
 
 # Optional REPL history
 .node_repl_history 
+
+# vscode
+.vscode/
+.venv/
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production

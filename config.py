@@ -1,12 +1,13 @@
+import asyncio
+from datetime import datetime
 from typing import Dict, List
 
 from google.genai import types
-from pydantic import EmailStr
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # Google
+    # Google Gemini
     google_gemini_genai_api_token: str
     google_gemini_genai_model: str = "gemini-2.5-flash-lite-preview-06-17"
     google_gemini_embedding_model: str = "gemini-embedding-exp-03-07"
@@ -18,6 +19,40 @@ class Settings(BaseSettings):
         task_type="RETRIEVAL_DOCUMENT",
         output_dimensionality=3072,
     )
+
+    # ChromaDB
+    chromadb_api_key: str
+    chromadb_tenant: str
+    chromadb_database: str = "sumitup-dev"
+    chromadb_collection_name: str = "newsletters"
+
+    # MongoDB
+    mongodb_uri: str
+    mongodb_database: str = "sumitup-dev"
+    mongodb_collection_name: str = "newsletters"
+
+    # Tavily search
+    tavily_search_api_key: str
+
+    # system instructions
+    system_instructions_path: str = "prompts/instruction.md"
+    today_date: str = datetime.now().strftime("%Y-%m-%d")
+    system_instructions: str = (
+        f"\nToday's date: {today_date}\n" + open(system_instructions_path, "r").read()
+    )
+
+    # shared store
+    shared_store: Dict[str, any] = {
+        "websocket": "",
+        "instruction": system_instructions,
+        "conversation_history": [],
+        "user_question": "",
+        "search_query": "",
+        "knowledge_base": "",
+        "progress_queue": asyncio.Queue(),
+        "current_url": "",
+        "current_page_context": {},
+    }
 
     # Popular tech newsletters to monitor
     target_newsletters: List[Dict[str, str]] = [
@@ -47,7 +82,7 @@ class Settings(BaseSettings):
         "TLDR DevOps",
     ]
     # Logger
-    logger_level: str = "DEBUG"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    logger_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
     # TEST:
     # test newsletter name

@@ -12,10 +12,28 @@ def call_llm(prompt: str) -> str:
     return response.text
 
 
+async def stream_llm(prompt: str):
+    client = genai.Client(
+        api_key=settings.google_gemini_genai_api_token,
+    )
+    model = settings.google_gemini_genai_model
+    response = await client.aio.models.generate_content_stream(
+        model=model, contents=[prompt]
+    )
+    async for chunk in response:
+        yield chunk.text
+
+
 if __name__ == "__main__":
-    test_prompt = "Hello, how are you?"
+    import asyncio
+
+    test_prompt = "DRS in F1 racing?"
 
     # First call - should hit the API
     print("Making call...")
-    response1 = call_llm(test_prompt)
-    print(f"Response: {response1}")
+
+    async def main():
+        async for chunk in stream_llm(test_prompt):
+            print(f"Response: {chunk}")
+
+    asyncio.run(main())

@@ -6,15 +6,18 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "beautifulsoup4>=4.12.2",
+    "chromadb>=1.0.15",
     "crawl4ai>=0.7.0",
     "fastapi>=0.100.0",
     "google-cloud-aiplatform>=1.25.0",
     "google-genai>=1.25.0",
+    "motor>=3.7.1",
     "playwright>=1.53.0",
     "pocketflow>=0.0.1",
     "pydantic-settings>=2.10.1",
     "python-multipart>=0.0.6",
     "pyyaml>=6.0",
     "requests>=2.31.0",
+    "tavily-python>=0.7.9",
     "uvicorn>=0.22.0",
 ]

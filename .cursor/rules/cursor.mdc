@@ -1,7 +1,5 @@
 ---
-description: "Agentic Coding"
-globs:
-alwaysApply: false
+alwaysApply: true
 ---
 
 <!-- ---
