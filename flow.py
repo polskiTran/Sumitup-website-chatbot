@@ -1,5 +1,6 @@
-from pocketflow import Flow
+from pocketflow import Flow, Node
 
+from config import settings
 from nodes import (
     AnswerQuestion,
     CurrentPageContext,
@@ -7,6 +8,7 @@ from nodes import (
     SearchDatabase,
     WebSearch,
 )
+from tracing import TracingConfig, trace_flow
 from utils.visualize import build_mermaid
 
 # def create_support_bot_flow():
@@ -28,6 +30,28 @@ from utils.visualize import build_mermaid
 
 #     # Create flow starting with crawl node
 #     return Flow(start=crawl_node)
+
+# ------------------------------
+# Tracing
+# ------------------------------
+# config = TracingConfig.from_env()
+config = TracingConfig(
+    langfuse_secret_key=settings.langfuse_secret_key,
+    langfuse_public_key=settings.langfuse_public_key,
+    langfuse_host=settings.langfuse_host,
+    debug=settings.pocketflow_tracing_debug,
+    # trace_outputs=False,
+    # trace_errors=False,
+)
+
+
+# ------------------------------
+# Flow
+# ------------------------------
+@trace_flow(flow_name="SumitupSupportBot", config=config)
+class SupportBotFlow(Flow):
+    def __init__(self, start_node: Node):
+        super().__init__(start=start_node)
 
 
 def create_support_bot_flow():
@@ -51,10 +75,10 @@ def create_support_bot_flow():
     # print(build_mermaid(Flow(start=decide_action_node)))
 
     # Create flow starting with decide_action_node
-    return Flow(start=current_page_context_node)
+    # return Flow(start=current_page_context_node)
+    return SupportBotFlow(start_node=current_page_context_node)
 
-
-support_bot_flow = create_support_bot_flow()
 
 if __name__ == "__main__":
+    support_bot_flow = create_support_bot_flow()
     print(build_mermaid(support_bot_flow))

@@ -4,7 +4,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 from config import settings
-from flow import create_support_bot_flow
+from flow import SupportBotFlow, create_support_bot_flow
 
 # ------------------------------
 # Logger
@@ -159,12 +159,18 @@ def main():
 
     # Create the agent flow
     agent_flow = create_support_bot_flow()
+    # agent_flow = SupportBotFlow()
 
     # Process the question
     shared = {
         "today_date": datetime.now().strftime("%Y-%m-%d"),
-        "question": question,
+        "user_question": question,
         "instruction": settings.system_instructions,
+        "conversation_history": [],
+        "current_url": "",
+        "current_page_context": {},
+        "knowledge_base": "",
+        # "progress_queue": asyncio.Queue(),
     }
     logger.info(f"🤔 Processing question: {question}")
     agent_flow.run(shared)

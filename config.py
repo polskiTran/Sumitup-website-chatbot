@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     # Tavily search
     tavily_search_api_key: str
 
+    # Langfuse
+    langfuse_public_key: str
+    langfuse_secret_key: str
+    langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_project: str = "sumitup"
+    pocketflow_tracing_debug: bool
+
     # system instructions
     system_instructions_path: str = "prompts/instruction.md"
     today_date: str = datetime.now().strftime("%Y-%m-%d")
@@ -52,6 +59,7 @@ class Settings(BaseSettings):
         "progress_queue": asyncio.Queue(),
         "current_url": "",
         "current_page_context": {},
+        "final_answer": "",
     }
 
     # Popular tech newsletters to monitor

@@ -25,7 +25,7 @@ logger.setLevel(settings.logger_level)
 console_handler = logging.StreamHandler()
 console_handler.setLevel(settings.logger_level)  # Capture all levels
 
-# Create formatter and add it to the handler. Addd function name to the message and class name to the message
+# Create formatter and add it to the handler. Add function name to the message and class name to the message
 formatter = logging.Formatter(
     "\n🪵 [%(asctime)s] %(levelname)s in [%(module)s : %(funcName)s : ]: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
@@ -498,13 +498,20 @@ class CurrentPageContext(Node):
     def prep(self, shared):
         """Get the current page url and current page context (if already in the shared store) from the shared store."""
         # get current url from shared store
-        current_url = shared.get("current_url", "")
-        current_page_context = shared.get("current_page_context", {})
-        return current_url, current_page_context
+        # current_url = shared.get("current_url", "")
+        # current_page_context = shared.get("current_page_context", {})
+        # return current_url, current_page_context
+        return {
+            "current_url": shared.get("current_url", ""),
+            "current_page_context": shared.get("current_page_context", {}),
+        }
 
     def exec(self, inputs):
         """Get the current page context using url_extractor if not in the shared store."""
-        current_url, current_page_context = inputs
+        current_url = inputs["current_url"]
+        current_page_context = inputs["current_page_context"]
+        if current_url == "":
+            return "decide", "no_url"
         if current_page_context.get(current_url, "") == "":
             # shared store cache miss
             return url_extractor(current_url), "cache_miss"
@@ -521,6 +528,8 @@ class CurrentPageContext(Node):
         """Save the current page context and go back to the decision node."""
         # logging, truncate the context to 1000 characters
         exec_res_str, exec_res_type = exec_res
+        if exec_res_type == "no_url":
+            return "decide"
         # exec_res_str_truncated = str(exec_res_str)[:100]
         logger.info(
             f"🔍 Current page context for {shared['current_url']}...\n(type: {exec_res_type})",
@@ -557,23 +566,21 @@ class DecideAction(Node):
             "Current shared store in DecideAction: \n%s", pprint.pformat(shared)
         )
         # Return both for the exec step
-        return (
-            user_question,
-            knowledge_base,
-            instruction,
-            conversation_history,
-            current_page_context,
-        )
+        return {
+            "user_question": user_question,
+            "knowledge_base": knowledge_base,
+            "instruction": instruction,
+            "conversation_history": conversation_history,
+            "current_page_context": current_page_context,
+        }
 
     def exec(self, inputs):
         """Call the LLM to decide whether to search or answer."""
-        (
-            user_question,
-            knowledge_base,
-            instruction,
-            conversation_history,
-            current_page_context,
-        ) = inputs
+        user_question = inputs["user_question"]
+        knowledge_base = inputs["knowledge_base"]
+        instruction = inputs["instruction"]
+        conversation_history = inputs["conversation_history"]
+        current_page_context = inputs["current_page_context"]
         # Format conversation history for the prompt
         history_str = ""
         if conversation_history:
@@ -618,8 +625,8 @@ thinking: |
 action: database-search # OR web-search OR answer
 reason: <why you chose this action>
 answer: <if action is answer>
-database-search_query: <specific search query if action is database-search>
-web-search_query: <specific search query if action is web-search>
+database-search-query: <specific search query if action is database-search>
+web-search-query: <specific search query if action is web-search>
 ```
 IMPORTANT: Make sure to:
 1. Use proper indentation (4 spaces) for all multi-line fields
@@ -646,26 +653,26 @@ IMPORTANT: Make sure to:
         # If LLM decided to search, save the search query
         if exec_res["action"] == "database-search":
             # save the search query
-            shared["search_query"] = exec_res["database-search_query"]
+            shared["search_query"] = exec_res["database-search-query"]
             logger.info(
-                f"🔍 Agent decided to search for: {exec_res['database-search_query']}"
+                f"🔍 Agent decided to search database: {exec_res['database-search-query']}"
             )
             # update progress queue
             if "progress_queue" in shared:
                 shared["progress_queue"].put_nowait(
-                    f"Searching for: {exec_res['database-search_query']} in the database..."
+                    f"Searching for: {exec_res['database-search-query']} in the database..."
                 )
             return "database-search"  # need to search more
         elif exec_res["action"] == "web-search":
             # save the search query
-            shared["search_query"] = exec_res["web-search_query"]
+            shared["search_query"] = exec_res["web-search-query"]
             logger.info(
-                f"🔍 Agent decided to search for: {exec_res['web-search_query']}"
+                f"🔍 Agent decided to search web: {exec_res['web-search-query']}"
             )
             # update progress queue
             if "progress_queue" in shared:
                 shared["progress_queue"].put_nowait(
-                    f"Searching for: {exec_res['web-search_query']} on the internet..."
+                    f"Searching for: {exec_res['web-search-query']} on the internet..."
                 )
             return "web-search"  # need to search more
         else:
@@ -688,10 +695,14 @@ IMPORTANT: Make sure to:
 class SearchDatabase(Node):
     def prep(self, shared):
         """Get the search query from the shared store."""
-        return shared["search_query"]
+        # return shared["search_query"]
+        return {
+            "search_query": shared["search_query"],
+        }
 
-    def exec(self, search_query):
+    def exec(self, inputs):
         """Search the database for the given query."""
+        search_query = inputs["search_query"]
         results = chromadb_vector_search(search_query)
         return results
 
@@ -723,11 +734,14 @@ class SearchDatabase(Node):
 class WebSearch(Node):
     def prep(self, shared):
         """Get the question and context for answering."""
-        return shared["search_query"]
+        # return shared["search_query"]
+        return {
+            "search_query": shared["search_query"],
+        }
 
     def exec(self, inputs):
         """Search the web for the given question."""
-        search_query = inputs
+        search_query = inputs["search_query"]
         return web_search(search_query)
 
     def exec_fallback(self, prep_res, exc):
@@ -874,25 +888,23 @@ class AnswerQuestion(Node):
         logger.debug(
             "Current shared store in AnswerQuestion: \n%s", pprint.pformat(shared)
         )
-        return (
-            shared["user_question"],
-            shared.get("knowledge_base", ""),
-            shared["instruction"],
-            shared.get("conversation_history", []),
-            shared.get("current_page_context", ""),
-            shared.get("current_url", ""),
-        )
+        return {
+            "user_question": shared["user_question"],
+            "knowledge_base": shared.get("knowledge_base", ""),
+            "instruction": shared["instruction"],
+            "conversation_history": shared.get("conversation_history", []),
+            "current_page_context": shared.get("current_page_context", ""),
+            "current_url": shared.get("current_url", ""),
+        }
 
     def exec(self, inputs):
         """Call the LLM to generate a final answer."""
-        (
-            user_question,
-            knowledge_base,
-            instruction,
-            conversation_history,
-            current_page_context,
-            current_url,
-        ) = inputs
+        user_question = inputs["user_question"]
+        knowledge_base = inputs["knowledge_base"]
+        instruction = inputs["instruction"]
+        conversation_history = inputs["conversation_history"]
+        current_page_context = inputs["current_page_context"]
+        current_url = inputs["current_url"]
 
         logger.info("✍️ Crafting final answer...")
 
@@ -915,8 +927,8 @@ Provide a comprehensive answer using the research results. IMPORTANT:
 - If the research results are not enough to answer the question, say so.
 - If the research results are not enough to answer the question, say so.
 - Must include the source of the information in the answer in the format:
-""" + open("prompts/answer_instructions.md", "r").read()
-
+"""
+        # + open("prompts/answer_instructions.md", "r").read()
         # Call the LLM to generate an answer
         answer = call_llm(prompt)
         return answer
@@ -932,6 +944,7 @@ Provide a comprehensive answer using the research results. IMPORTANT:
         conversation_history = shared.get("conversation_history", [])
         conversation_history.append({"bot": exec_res})
         shared["conversation_history"] = conversation_history
+        shared["final_answer"] = exec_res
 
         logger.info("✅ Answer generated successfully")
         # logger.info(f"💬 Conversation history: {pprint.pformat(conversation_history)}")

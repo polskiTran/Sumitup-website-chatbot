@@ -58,28 +58,28 @@ def validate_and_sanitize_input(
     return question.strip(), instruction.strip()
 
 
-@app.get("/", response_class=HTMLResponse)
-async def get_root(request: Request):
-    """Serve the main configuration page."""
-    with open("static/index.html", "r") as f:
-        return HTMLResponse(content=f.read())
+# @app.get("/", response_class=HTMLResponse)
+# async def get_root(request: Request):
+#     """Serve the main configuration page."""
+#     with open("static/index.html", "r") as f:
+#         return HTMLResponse(content=f.read())
 
 
-@app.get("/chatbot", response_class=HTMLResponse)
-async def get_chatbot(request: Request):
-    """Serve the chatbot page."""
-    with open("static/chatbot.html", "r") as f:
-        return HTMLResponse(content=f.read())
+# @app.get("/chatbot", response_class=HTMLResponse)
+# async def get_chatbot(request: Request):
+#     """Serve the chatbot page."""
+#     with open("static/chatbot.html", "r") as f:
+#         return HTMLResponse(content=f.read())
 
 
-@app.get("/embed/chatbot.js", response_class=HTMLResponse)
-async def get_chatbot_js(request: Request):
-    """Serve the chatbot JavaScript for embedding."""
-    with open("static/chatbot.js", "r") as f:
-        content = f.read()
-    return HTMLResponse(
-        content=content, headers={"Content-Type": "application/javascript"}
-    )
+# @app.get("/embed/chatbot.js", response_class=HTMLResponse)
+# async def get_chatbot_js(request: Request):
+#     """Serve the chatbot JavaScript for embedding."""
+#     with open("static/chatbot.js", "r") as f:
+#         content = f.read()
+#     return HTMLResponse(
+#         content=content, headers={"Content-Type": "application/javascript"}
+#     )
 
 
 class ConnectionManager:
@@ -281,13 +281,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     event_data = {"type": "progress", "payload": progress_msg}
                 await websocket.send_text(json.dumps(event_data))
 
-            if shared_state.get("final_answer"):
-                shared_state["conversation_history"].append(
-                    {
-                        "user": shared_state["user_question"],
-                        "bot": shared_state["final_answer"],
-                    }
-                )
+            # if shared_state.get("final_answer"):
+            #     shared_state["conversation_history"].append(
+            #         {
+            #             "user": shared_state["user_question"],
+            #             "bot": shared_state["final_answer"],
+            #         }
+            #     )
             # shared_state["urls_to_process"] = []
 
             manager.set_shared_state(websocket, shared_state)

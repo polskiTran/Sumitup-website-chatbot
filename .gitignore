@@ -94,6 +94,7 @@ coverage/
 
 # vscode
 .vscode/
+.settings.json
 .venv/
 .env
 .env.local
