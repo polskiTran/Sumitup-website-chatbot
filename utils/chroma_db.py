@@ -5,7 +5,7 @@ import chromadb
 from config import settings
 
 
-def chromadb_vector_search(query: str, limit: int = 5, filter: dict = None):
+def chromadb_vector_search(query: str, limit: int = 10, filter: dict = None):
     """
     Search for newsletters in chromadb using vector search
     Args:
@@ -36,7 +36,7 @@ def chromadb_vector_search(query: str, limit: int = 5, filter: dict = None):
     return response
 
 
-def chromadb_query_search(query: dict = {}, limit: int = 5):
+def chromadb_query_search(query: dict = {}, limit: int = 10):
     """
     Search for newsletters in chromadb using query search
     Args:
@@ -102,17 +102,17 @@ if __name__ == "__main__":
     #         {"date": "2025-07-12"},
     #     ]
     # }
-    # chroma_filter = {"$and": [{"date": date3}, {"sender_name": "TLDR AI"}]}
-    chroma_filter = {"date": date3}
+    chroma_filter = {"$and": [{"date": date3}, {"sender_name": "TLDR AI"}]}
+    # chroma_filter = {"date": date3}
 
     async def run():
-        # print("---------------------------------------------------")
-        # print("---------------------------------------------------")
-        # print("chromadb_vector_search")
-        # pprint(await chromadb_vector_search(query, limit, chroma_filter))
         print("---------------------------------------------------")
         print("---------------------------------------------------")
-        print("chromadb_query_search")
+        print("chromadb_vector_search")
+        pprint(chromadb_vector_search(query, limit, chroma_filter))
+        # print("---------------------------------------------------")
+        # print("---------------------------------------------------")
+        # print("chromadb_query_search")
         # pprint(await chromadb_query_search(chroma_filter, limit))
 
     asyncio.run(run())

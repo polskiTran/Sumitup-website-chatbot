@@ -7,7 +7,7 @@ from pocketflow import AsyncNode, BatchNode, Node
 
 from config import settings
 from utils.call_llm import call_llm, stream_llm
-from utils.chroma_db import chromadb_vector_search
+from utils.chroma_db import chromadb_query_search, chromadb_vector_search
 from utils.web_search import url_extractor, web_search
 
 # from utils.url_validator import filter_valid_urls
@@ -492,63 +492,6 @@ if not logger.hasHandlers():
 
 
 # ------------------------------
-# CurrentPageContext
-# ------------------------------
-class CurrentPageContext(Node):
-    def prep(self, shared):
-        """Get the current page url and current page context (if already in the shared store) from the shared store."""
-        # get current url from shared store
-        # current_url = shared.get("current_url", "")
-        # current_page_context = shared.get("current_page_context", {})
-        # return current_url, current_page_context
-        return {
-            "current_url": shared.get("current_url", ""),
-            "current_page_context": shared.get("current_page_context", {}),
-        }
-
-    def exec(self, inputs):
-        """Get the current page context using url_extractor if not in the shared store."""
-        current_url = inputs["current_url"]
-        current_page_context = inputs["current_page_context"]
-        if current_url == "":
-            return "decide", "no_url"
-        if current_page_context.get(current_url, "") == "":
-            # shared store cache miss
-            return url_extractor(current_url), "cache_miss"
-        else:
-            # shared store cache hit
-            return current_page_context.get(current_url, ""), "cache_hit"
-
-    def exec_fallback(self, prep_res, exc):
-        """Fallback when current page context fails."""
-        logger.error(f"Error getting current page context: {exc}")
-        return "decide"
-
-    def post(self, shared, prep_res, exec_res):
-        """Save the current page context and go back to the decision node."""
-        # logging, truncate the context to 1000 characters
-        exec_res_str, exec_res_type = exec_res
-        if exec_res_type == "no_url":
-            return "decide"
-        # exec_res_str_truncated = str(exec_res_str)[:100]
-        logger.info(
-            f"🔍 Current page context for {shared['current_url']}...\n(type: {exec_res_type})",
-        )
-        # save the current page context
-        if exec_res_type == "cache_miss":
-            shared["current_page_context"][shared["current_url"]] = exec_res_str
-        else:
-            # cache hit
-            pass
-        # update progress queue
-        if "progress_queue" in shared:
-            shared["progress_queue"].put_nowait(
-                f"Getting current page context [{shared['current_url']}]..."
-            )
-        return "decide"
-
-
-# ------------------------------
 # DecideAction
 # ------------------------------
 class DecideAction(Node):
@@ -560,7 +503,9 @@ class DecideAction(Node):
         user_question = shared["user_question"]
         instruction = shared["instruction"]
         conversation_history = shared.get("conversation_history", [])
-        current_page_context = shared.get("current_page_context", "")
+        current_url = shared.get("current_url", "")
+        current_page_context = shared.get("current_page_context", {})
+        read_this_link = shared.get("read_this_link", "")
         # log the current shared store
         logger.debug(
             "Current shared store in DecideAction: \n%s", pprint.pformat(shared)
@@ -571,7 +516,9 @@ class DecideAction(Node):
             "knowledge_base": knowledge_base,
             "instruction": instruction,
             "conversation_history": conversation_history,
+            "current_url": current_url,
             "current_page_context": current_page_context,
+            "read_this_link": read_this_link,
         }
 
     def exec(self, inputs):
@@ -580,7 +527,9 @@ class DecideAction(Node):
         knowledge_base = inputs["knowledge_base"]
         instruction = inputs["instruction"]
         conversation_history = inputs["conversation_history"]
+        current_url = inputs["current_url"]
         current_page_context = inputs["current_page_context"]
+        read_this_link = inputs["read_this_link"]
         # Format conversation history for the prompt
         history_str = ""
         if conversation_history:
@@ -591,6 +540,9 @@ class DecideAction(Node):
 
         logger.info("🤔 Agent deciding what to do next...")
 
+        # Current Page Link: {current_url}, Current Page Context: {current_page_context}
+        # Read This Link: {read_this_link}
+
         # Create a prompt to help the LLM decide what to do next with proper yaml formatting
         prompt = f"""
 {history_str}
@@ -599,7 +551,7 @@ You are a research assistant that can search a tech newsletter database.
 Instruction: {instruction}
 Question: {user_question}
 Previous Research: {knowledge_base}
-Current Page Context: {current_page_context}
+Current Newsletters Page Link: {current_url}, Current Newsletters Page Context: {current_page_context}
 
 ### ACTION SPACE
 [1] database-search
@@ -612,7 +564,18 @@ Current Page Context: {current_page_context}
   Parameters:
     - query (str): What to search for
 
-[3] answer
+
+[3] read-this-link
+  Description: Get the content from a specific link (if the user provides a specific link)
+  Parameters:
+    - link (str): The url of the link to read
+
+[4] current-page-context
+  Description: Get the content from the current page (if the user asks about the current page)
+  Parameters:
+    - url (str): The url of the current page
+
+[5] answer
   Description: Answer the question with current knowledge
 
 ## NEXT ACTION
@@ -622,11 +585,13 @@ Return your response in this format:
 ```yaml
 thinking: |
     <your step-by-step reasoning process>
-action: database-search # OR web-search OR answer
+action: database-search # OR web-search OR read-this-link OR current-page-context OR answer
 reason: <why you chose this action>
 answer: <if action is answer>
 database-search-query: <specific search query if action is database-search>
 web-search-query: <specific search query if action is web-search>
+read-this-link-query: <specific url if action is read-this-link>
+current-page-context-url: <specific url if action is current-page-context>
 ```
 IMPORTANT: Make sure to:
 1. Use proper indentation (4 spaces) for all multi-line fields
@@ -657,11 +622,6 @@ IMPORTANT: Make sure to:
             logger.info(
                 f"🔍 Agent decided to search database: {exec_res['database-search-query']}"
             )
-            # update progress queue
-            if "progress_queue" in shared:
-                shared["progress_queue"].put_nowait(
-                    f"Searching for: {exec_res['database-search-query']} in the database..."
-                )
             return "database-search"  # need to search more
         elif exec_res["action"] == "web-search":
             # save the search query
@@ -669,12 +629,21 @@ IMPORTANT: Make sure to:
             logger.info(
                 f"🔍 Agent decided to search web: {exec_res['web-search-query']}"
             )
-            # update progress queue
-            if "progress_queue" in shared:
-                shared["progress_queue"].put_nowait(
-                    f"Searching for: {exec_res['web-search-query']} on the internet..."
-                )
             return "web-search"  # need to search more
+        elif exec_res["action"] == "read-this-link":
+            # save the link
+            shared["read_this_link"] = exec_res["read-this-link-query"]
+            logger.info(
+                f"🔍 Agent decided to read this link: {exec_res['read-this-link-query']}"
+            )
+            return "read-this-link"  # need to read more
+        elif exec_res["action"] == "current-page-context":
+            # save the url
+            shared["current_url"] = exec_res["current-page-context-url"]
+            logger.info(
+                f"🔍 Agent decided to get the current page context: {exec_res['current-page-context-url']}"
+            )
+            return "current-page-context"  # need to get more
         else:
             # shared["context"] = exec_res[
             #     "answer"
@@ -695,7 +664,11 @@ IMPORTANT: Make sure to:
 class SearchDatabase(Node):
     def prep(self, shared):
         """Get the search query from the shared store."""
-        # return shared["search_query"]
+        # update progress queue
+        if "progress_queue" in shared:
+            shared["progress_queue"].put_nowait(
+                f"Searching for: {shared['search_query']} in the database..."
+            )
         return {
             "search_query": shared["search_query"],
         }
@@ -717,7 +690,7 @@ class SearchDatabase(Node):
         previous = shared.get("knowledge_base", "")
         shared["knowledge_base"] = (
             previous
-            + "\n\nSEARCH: "
+            + "\n\n(*) DATABASE SEARCH: "
             + shared["search_query"]
             + "\nRESULTS: "
             + yaml.dump(exec_res, allow_unicode=True)
@@ -734,7 +707,11 @@ class SearchDatabase(Node):
 class WebSearch(Node):
     def prep(self, shared):
         """Get the question and context for answering."""
-        # return shared["search_query"]
+        # update progress queue
+        if "progress_queue" in shared:
+            shared["progress_queue"].put_nowait(
+                f"Searching for: {shared['search_query']} on the internet..."
+            )
         return {
             "search_query": shared["search_query"],
         }
@@ -761,7 +738,7 @@ class WebSearch(Node):
         previous = shared.get("knowledge_base", "")
         shared["knowledge_base"] = (
             previous
-            + "\n\nSEARCH: "
+            + "\n\n(*) WEB SEARCH: "
             + shared["search_query"]
             + "\nRESULTS: "
             + yaml.dump(exec_res, allow_unicode=True)
@@ -771,117 +748,104 @@ class WebSearch(Node):
 
 
 # ------------------------------
-# StreamingChatNode
+# ReadThisLink
 # ------------------------------
-# class StreamingChatNode(AsyncNode):
-#     async def prep_async(self, shared):
-#         user_message = shared.get("user_message", "")
-#         websocket = shared.get("websocket")
+class ReadThisLink(Node):
+    def prep(self, shared):
+        """Read the link and extract the content."""
+        # update progress queue
+        if "progress_queue" in shared:
+            shared["progress_queue"].put_nowait(
+                f"Reading the link: {shared['read_this_link']}..."
+            )
+        return {
+            "read_this_link": shared["read_this_link"],
+        }
 
-#         conversation_history = shared.get("conversation_history", [])
-#         conversation_history.append({"role": "user", "content": user_message})
+    def exec(self, inputs):
+        """Read the link and extract the content."""
+        read_this_link = inputs["read_this_link"]
+        read_res = url_extractor(read_this_link)
+        if read_res["results"] == []:
+            return "unable_to_read"
+        else:
+            return read_res
 
-#         return conversation_history, websocket
+    def exec_fallback(self, prep_res, exc):
+        """Fallback when reading the link fails."""
+        logger.error(f"Error reading the link: {exc}")
+        return "Error reading the link: " + exc
 
-#     async def exec_async(self, prep_res):
-#         messages, websocket = prep_res
+    def post(self, shared, prep_res, exec_res):
+        """Save the link content and go back to the decision node."""
+        if exec_res == "unable_to_read":
+            read_res = self.exec_fallback(prep_res, exec_res)
+        else:
+            read_res = exec_res["results"][0]["raw_content"]
+        # Add the link content to the context in the shared store
+        previous = shared.get("knowledge_base", "")
+        shared["knowledge_base"] = (
+            previous
+            + "\n\n(*) READ THIS LINK: "
+            + shared["read_this_link"]
+            + "\nCONTENT: "
+            + read_res
+        )
+        return "decide"
 
-#         await websocket.send_text(json.dumps({"type": "start", "content": ""}))
 
-#         full_response = ""
-#         async for chunk_content in stream_llm(messages):
-#             full_response += chunk_content
-#             await websocket.send_text(
-#                 json.dumps({"type": "chunk", "content": chunk_content})
-#             )
+# ------------------------------
+# CurrentPageContext
+# ------------------------------
+class CurrentPageContext(Node):
+    def prep(self, shared):
+        """Get the current page url and current page context (if already in the shared store) from the shared store."""
+        # update progress queue
+        if "progress_queue" in shared:
+            shared["progress_queue"].put_nowait(
+                f"Getting current page context [{shared['current_url']}]..."
+            )
+        return {
+            "current_url": shared.get("current_url", ""),
+            "current_page_context": shared.get("current_page_context", {}),
+        }
 
-#         await websocket.send_text(json.dumps({"type": "end", "content": ""}))
+    def exec(self, inputs):
+        """Get the current page context using url_extractor if not in the shared store."""
+        current_url = inputs["current_url"]
+        current_page_context = inputs["current_page_context"]
+        if current_url == "":
+            return "decide", "no_url"
+        if current_page_context.get(current_url, "") == "":
+            # shared store cache miss
+            return url_extractor(current_url), "cache_miss"
+        else:
+            # shared store cache hit
+            return current_page_context.get(current_url, ""), "cache_hit"
 
-#         return full_response, websocket
+    def exec_fallback(self, prep_res, exc):
+        """Fallback when current page context fails."""
+        logger.error(f"Error getting current page context: {exc}")
+        return "decide"
 
-#     async def post_async(self, shared, prep_res, exec_res):
-#         full_response, websocket = exec_res
-
-#         conversation_history = shared.get("conversation_history", [])
-#         conversation_history.append({"role": "assistant", "content": full_response})
-#         shared["conversation_history"] = conversation_history
+    def post(self, shared, prep_res, exec_res):
+        """Save the current page context and go back to the decision node."""
+        # logging, truncate the context to 1000 characters
+        exec_res_str, exec_res_type = exec_res
+        if exec_res_type == "no_url":
+            return "decide"
+        # save the current page context
+        if exec_res_type == "cache_miss":
+            shared["current_page_context"][shared["current_url"]] = exec_res_str
+        else:
+            # cache hit
+            pass
+        return "decide"
 
 
 # ------------------------------
 # AnswerQuestion
 # ------------------------------
-# class AnswerQuestion(Node):
-#     def prep(self, shared):
-#         """Get the question and context for answering."""
-#         logger.debug(
-#             "Current shared store in AnswerQuestion: \n%s", pprint.pformat(shared)
-#         )
-#         return (
-#             shared["user_question"],
-#             shared.get("knowledge_base", ""),
-#             shared["instruction"],
-#             shared.get("conversation_history", []),
-#             shared.get("current_page_context", ""),
-#             shared.get("current_url", ""),
-#         )
-
-#     def exec(self, inputs):
-#         """Call the LLM to generate a final answer."""
-#         (
-#             user_question,
-#             knowledge_base,
-#             instruction,
-#             conversation_history,
-#             current_page_context,
-#             current_url,
-#         ) = inputs
-
-#         logger.info("✍️ Crafting final answer...")
-
-#         # Create a prompt for the LLM to answer the question
-#         prompt = f"""
-# ### CONTEXT
-# Based on the following information, answer the question.
-# Question: {user_question}
-# Research: {knowledge_base}
-# Conversation History: {conversation_history}
-# Current Page Context: {current_page_context[current_url]}
-
-# ### INSTRUCTION
-# {instruction}
-
-# ## YOUR ANSWER:
-# Provide a comprehensive answer using the research results. IMPORTANT:
-# - Use the research results to answer the question.
-# - If the research results are not relevant to the question, say so.
-# - If the research results are not enough to answer the question, say so.
-# - If the research results are not enough to answer the question, say so.
-# - Must include the source of the information in the answer in the format:
-# """ + open("prompts/answer_instructions.md", "r").read()
-
-#         # Call the LLM to generate an answer
-#         answer = call_llm(prompt)
-#         return answer
-
-#     def exec_fallback(self, prep_res, exc):
-#         """Fallback when answer generation fails."""
-#         logger.error(f"Error generating answer: {exc}")
-#         return "decide"
-
-#     def post(self, shared, prep_res, exec_res):
-#         """Save the final answer and complete the flow."""
-#         # Save the answer in the shared store
-#         conversation_history = shared.get("conversation_history", [])
-#         conversation_history.append({"bot": exec_res})
-#         shared["conversation_history"] = conversation_history
-
-#         logger.info("✅ Answer generated successfully")
-#         # logger.info(f"💬 Conversation history: {pprint.pformat(conversation_history)}")
-
-#         # We're done - no need to continue the flow
-#         return "done"
-
-
 class AnswerQuestion(Node):
     def prep(self, shared):
         """Get the question and context for answering."""
@@ -928,6 +892,7 @@ Provide a comprehensive answer using the research results. IMPORTANT:
 - If the research results are not enough to answer the question, say so.
 - Must include the source of the information in the answer in the format:
 """
+        # TODO: add answer instructions
         # + open("prompts/answer_instructions.md", "r").read()
         # Call the LLM to generate an answer
         answer = call_llm(prompt)

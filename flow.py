@@ -5,6 +5,7 @@ from nodes import (
     AnswerQuestion,
     CurrentPageContext,
     DecideAction,
+    ReadThisLink,
     SearchDatabase,
     WebSearch,
 )
@@ -62,21 +63,23 @@ def create_support_bot_flow():
     decide_action_node = DecideAction(max_retries=3, wait=10)
     web_search_node = WebSearch(max_retries=3, wait=10)
     current_page_context_node = CurrentPageContext(max_retries=3, wait=10)
-
+    read_this_link_node = ReadThisLink(max_retries=3, wait=10)
     # Connect nodes with transitions
-    current_page_context_node - "decide" >> decide_action_node
     decide_action_node - "database-search" >> search_database_node
     decide_action_node - "web-search" >> web_search_node
+    decide_action_node - "read-this-link" >> read_this_link_node
+    decide_action_node - "current-page-context" >> current_page_context_node
     decide_action_node - "answer" >> answer_question_node
     search_database_node - "decide" >> decide_action_node
     web_search_node - "decide" >> decide_action_node
-
+    read_this_link_node - "decide" >> decide_action_node
+    current_page_context_node - "decide" >> decide_action_node
     # visualize the flow
     # print(build_mermaid(Flow(start=decide_action_node)))
 
     # Create flow starting with decide_action_node
     # return Flow(start=current_page_context_node)
-    return SupportBotFlow(start_node=current_page_context_node)
+    return SupportBotFlow(start_node=decide_action_node)
 
 
 if __name__ == "__main__":
