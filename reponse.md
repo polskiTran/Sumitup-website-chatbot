@@ -136,3 +136,62 @@ Here's a breakdown of the key themes:
   - **xAI's significant funding rounds** further highlight the massive capital investment flowing into AI development. ([TLDR AI 2025-07-02](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-02/tldr-ai-2025-07-02))
 
 Overall, the past week's AI news indicates a rapidly evolving, highly competitive landscape where model performance, strategic talent acquisition, and robust infrastructure are paramount.
+
+=========================================================
+
+> "identify emerging design trend using TLDR Design newsletter over the past week"
+
+Here's a summary of the TLDR Design newsletters from the past week:
+
+**Key Highlights:**
+
+- **AI in Design & Content Creation:** Google's Veo 3 now supports image-to-video generation. Apple is reportedly evolving its Dynamic Island. Pixar and Google alumni have launched Intangible, an AI video tool focused on 3D interfaces. Unilever is opening AI-powered graphic design studios globally to speed up content creation for its home care brands. xAI is hiring engineers to develop AI-powered anime companions.
+- **Design Tool & Platform Updates:** Figma Sites now supports apex domains and custom subdomains. Supabase has integrated with Figma Make for backend capabilities. Webflow has launched a new version of Interactions powered by GSAP for sophisticated animations.
+- **Industry Trends & Opinions:** Discussions cover the increasing importance of design engineers, the need for "practical AI" embedded in creative workflows, and strategies for working with indecisive leaders. There's also a focus on UX debt, the role of pessimism in design, and the challenges of "accidental managers." The impact of AI on music and potentially design is also a growing concern.
+- **New Tools & Resources:** New tools include AI mesh gradients for Figma, a no-code app builder (Rocket.new), a vector-to-3D converter (Vecto3d), mockup generators, and a collection of editable SVGs.
+- **Brand & Product News:** Bentley is doubling down on design with a new logo and concept car. Ikea is launching new, user-friendly smart home products. Apple has redesigned its TV app with a new "Liquid Glass" aesthetic. The World Illustration Awards 2025 shortlist has been announced.
+
+**Newsletter Links:**
+
+- [TLDR Design - 2025-07-14](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-14/tldr-design-2025-07-14)
+- [TLDR Design - 2025-07-15](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-15/tldr-design-2025-07-15)
+- [TLDR Design - 2025-07-16](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-16/tldr-design-2025-07-16)
+- [TLDR Design - 2025-07-17](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-17/tldr-design-2025-07-17)
+- [TLDR Design - 2025-07-18](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-18/tldr-design-2025-07-18)
+
+============================================================
+
+Here's a summary of Ben Lorica's newsletters from the past week:
+
+**Quick Wins for your AI eval strategy**
+
+This newsletter focuses on practical strategies for improving AI evaluation processes. Key takeaways include:
+
+- **Establish Evaluation as an Engineering Discipline:** Treat AI evaluation like DevOps, with defined workflows, tooling, and metrics. This involves clearly defined tasks, representative datasets, and automated scorers.
+- **Layer Multiple Evaluation Methods:** Don't rely on a single method. Combine fast, deterministic checks with LLM-based evaluation and human expert review for a robust approach.
+- **Prioritize Reliability:** Focus on consistent performance rather than occasional peak performance. A system that works reliably 99.9% of the time is more valuable.
+- **Implement Dual-Track Evaluation:** Use both offline (pre-production) and online (production monitoring) evaluation systems to catch failures early and track real-world performance.
+- **Build Feedback Loops:** Create pipelines to transform production failures into new test cases, ensuring your evaluation datasets evolve with user behavior.
+- **Integrate Human Oversight:** Combine automated evaluation with targeted human review for nuanced quality assessment and ground truth validation.
+- **Design Cost-Aware Evaluation:** Balance thoroughness with computational expense by implementing sampling strategies and conditional evaluation.
+- **Evaluate Agent Workflows Holistically:** Assess the entire execution trajectory of AI agents, not just the final outputs.
+- **Continuously Improve Evaluation:** Treat the evaluation system itself as a product that requires iteration and refinement.
+- **Connect Metrics to Business Outcomes:** Map evaluation scores to business value to justify investments and demonstrate ROI.
+- **Document Evaluation Practices:** Maintain clear documentation for governance, compliance, and knowledge transfer.
+
+_Read more of the newsletters: [Ben Lorica - 2025/7/15](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-15/ben-lorica-2025-07-15)_
+
+**Superposition Meets Production—A Guide for AI Engineers**
+
+This newsletter features an interview with Jennifer Prendki about the intersection of quantum computing and AI production. Key points include:
+
+- **Quantum Computing for AI is Near-Term:** While universal quantum computers are years away, specific quantum applications for AI inference (like recommendation systems, financial fraud detection, and drug discovery) are emerging now, using machines with around 100 logical qubits.
+- **Quantum Advantage:** Quantum computers explore many paths simultaneously due to superposition, offering exponential computational power for specific tasks where classical computers hit limits.
+- **Hybrid Approach is Key:** Quantum computers will act as specialized accelerators, similar to GPUs, rather than replacements for classical systems. The workflow involves classical data handling, quantum state encoding, quantum processing, and measurement, with results returning to classical systems.
+- **Data Operations Challenges:** The "no-cloning theorem" means quantum data cannot be copied, breaking traditional data operations like backups and reproducibility. Data must be regenerated on demand.
+- **Topological Data Analysis (TDA):** Quantum computing can enable TDA, allowing for modeling of data's underlying structure and generating high-fidelity synthetic data, moving beyond simple extrapolation.
+- **Talent and Skills:** Data engineers and scientists don't need physics PhDs but must adapt their mental models to quantum concepts like superposition and entanglement. "Bridge talent" understanding both classical MLOps and quantum basics is crucial.
+- **Strategic Considerations:** Risks of not investing include competitive disadvantage, security vulnerabilities (Q-Day), talent scarcity, and ecosystem lock-out. Geopolitical factors also influence adoption.
+- **Actionable Steps for Leaders:** Identify candidate workloads, engage with hardware partners, build hybrid-stack readiness, cultivate talent, join standards conversations, and implement post-quantum cryptography.
+
+_Read more of the article: [Ben Lorica - 2025/7/17](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-17/ben-lorica-2025-07-17)_

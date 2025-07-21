@@ -20,6 +20,7 @@ if __name__ == "__main__":
     # pprint(web_search("NVIDIA current stock price?"))
     # extract url
     res = url_extractor(
-        "https://substack.com/redirect/2ae98519-a1b3-41b8-bbd9-18f5f6ab9d1d?j=eyJ1IjoiNXM4M296In0.tGNGSdtmlCx12UO5VTFY50vjzjDXKZsMTxKEYVZUdc8"
+        "https://substack.com/redirect/f23b48e2-9d22-48b5-891e-a91cbbc82fa8?j=eyJ1IjoiNXM4M296In0.tGNGSdtmlCx12UO5VTFY50vjzjDXKZsMTxKEYVZUdc8"
     )
-    pprint(res["results"][0]["raw_content"])
+    pprint(res)
+    # pprint(res["results"][0]["raw_content"])

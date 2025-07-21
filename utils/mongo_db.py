@@ -1,9 +1,9 @@
 import logging
-from typing import Optional
 
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
 
 from config import settings
+from helpers.helpers import build_dynamic_query
 from utils.embedding import embedding
 
 # ------------------------------
@@ -32,43 +32,7 @@ if not logger.hasHandlers():
 # ------------------------------
 # MongoDB
 # ------------------------------
-class Database:
-    client: Optional[AsyncIOMotorClient] = None
-
-
-db = Database()
-
-
-async def connect_to_mongo():
-    """Create database connection"""
-    try:
-        db.client = AsyncIOMotorClient(
-            settings.mongodb_uri,
-            maxPoolSize=10,
-            minPoolSize=10,
-        )
-        # logger.info("(*) Connected to MongoDB --------------------------------\n")
-    except Exception as e:
-        logger.error(f"Error connecting to MongoDB: {e}\n")
-        raise e
-
-
-async def disconnect_from_mongo():
-    """Close database connection"""
-    try:
-        if db.client:
-            db.client.close()
-            # logger.info(
-            #     "(*) Disconnected from MongoDB --------------------------------\n"
-            # )
-    except Exception as e:
-        logger.error(f"Error closing MongoDB connection: {e}\n")
-        raise e
-
-
-async def mongodb_vector_search(
-    query: str, limit: int = 5, pre_filter_query: dict = {}
-):
+def mongodb_vector_search(query: str, limit: int = 50, pre_filter_query: dict = {}):
     """
     Search for newsletters in mongodb using vector search
     Args:
@@ -80,10 +44,12 @@ async def mongodb_vector_search(
     """
 
     # connect to mongo db
-    await connect_to_mongo()
-    collection = db.client[settings.mongodb_database][settings.mongodb_collection_name]
+    client = MongoClient(
+        settings.mongodb_uri,
+    )
+    collection = client[settings.mongodb_database][settings.mongodb_collection_name]
 
-    logger.info(f"Pre filter query: {pre_filter_query}")
+    logger.info(f"Pre filter query in vector search: {pre_filter_query}")
 
     # vector search
     query_vector = embedding(query)
@@ -104,7 +70,7 @@ async def mongodb_vector_search(
 
     # clean results
     cleaned_results = []
-    async for doc in cursor:
+    for doc in cursor:
         cleaned_results.append(
             {
                 "id": doc["_id"],
@@ -116,15 +82,76 @@ async def mongodb_vector_search(
             }
         )
     # disconnect from mongo db
-    await disconnect_from_mongo()
+    client.close()
+    return cleaned_results
+
+
+def mongodb_query_search(query: dict, limit: int = 50):
+    """
+    Search for newsletters in mongodb using query search
+    Args:
+        query (dict): The query to search for
+        limit (int): The number of results to return
+    Returns:
+        list[dict]: The list of results
+    """
+    # connect to mongo db
+    client = MongoClient(
+        settings.mongodb_uri,
+    )
+    collection = client[settings.mongodb_database][settings.mongodb_collection_name]
+
+    logger.info(f"Pre filter query in query search: {query}")
+
+    # query search
+    cursor = collection.find(query).limit(limit)
+
+    # clean results
+    cleaned_results = []
+    for doc in cursor:
+        cleaned_results.append(
+            {
+                "id": doc["_id"],
+                "sender_name": doc["sender_name"],
+                "sender_email": doc["sender_email"],
+                "subject": doc["subject"],
+                "received_datetime": doc["received_datetime"],
+                "cleaned_md": doc["cleaned_md"],
+            }
+        )
+    # disconnect from mongo db
+    client.close()
     return cleaned_results
 
 
 if __name__ == "__main__":
-    import asyncio
+    from datetime import datetime
     from pprint import pprint
 
-    async def main():
-        pprint(await mongodb_vector_search("Windsurf acquisition"))
+    def main():
+        # test date range filter
+        date1 = "2025-07-10"
+        date2 = "2025-07-13"
+        # date3 = "2025-07-12"
+        date_timestamp1 = int(datetime.strptime(date1, "%Y-%m-%d").timestamp() * 1000)
+        date_timestamp2 = int(datetime.strptime(date2, "%Y-%m-%d").timestamp() * 1000)
 
-    asyncio.run(main())
+        # build query
+        pre_filter_query = build_dynamic_query(
+            start_date="2025-07-10",
+            end_date="2025-07-14",
+            sender_name=["TLDR AI", "Ben Lorica"],
+        )
+        # run test vector search
+        print("(*) Running test vector search...")
+        pprint(
+            mongodb_vector_search(
+                "Windsurf acquisition", pre_filter_query=pre_filter_query, limit=10
+            )
+        )
+
+        # run test query search
+        print("\n\n(*) Running test query search...")
+        pprint(mongodb_query_search(pre_filter_query, limit=30))
+
+    main()

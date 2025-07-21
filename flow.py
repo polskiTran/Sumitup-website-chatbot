@@ -2,12 +2,14 @@ from pocketflow import Flow, Node
 
 from config import settings
 from nodes import (
+    AnswerDatabaseSearch,
     AnswerQuestion,
-    CurrentPageContext,
+    DatabaseAgent,
     DecideAction,
+    ReadCurrentPage,
     ReadThisLink,
     SearchDatabase,
-    WebSearch,
+    SearchWeb,
 )
 from tracing import TracingConfig, trace_flow
 from utils.visualize import build_mermaid
@@ -60,17 +62,24 @@ def create_support_bot_flow():
     # Create nodes
     search_database_node = SearchDatabase(max_retries=3, wait=10)
     answer_question_node = AnswerQuestion(max_retries=3, wait=10)
-    decide_action_node = DecideAction(max_retries=3, wait=10)
-    web_search_node = WebSearch(max_retries=3, wait=10)
-    current_page_context_node = CurrentPageContext(max_retries=3, wait=10)
+    decide_action_node = DecideAction(max_retries=3, wait=3)
+    web_search_node = SearchWeb(max_retries=3, wait=10)
+    current_page_context_node = ReadCurrentPage(max_retries=3, wait=10)
     read_this_link_node = ReadThisLink(max_retries=3, wait=10)
+    database_agent_node = DatabaseAgent(max_retries=3, wait=10)
+    answer_database_search_node = AnswerDatabaseSearch(max_retries=3, wait=10)
+
     # Connect nodes with transitions
-    decide_action_node - "database-search" >> search_database_node
-    decide_action_node - "web-search" >> web_search_node
+    decide_action_node - "search-database" >> database_agent_node
+    decide_action_node - "search-web" >> web_search_node
     decide_action_node - "read-this-link" >> read_this_link_node
-    decide_action_node - "current-page-context" >> current_page_context_node
+    decide_action_node - "read-current-page" >> current_page_context_node
     decide_action_node - "answer" >> answer_question_node
-    search_database_node - "decide" >> decide_action_node
+
+    database_agent_node - "search-database" >> search_database_node
+    database_agent_node - "answer-search-database" >> answer_database_search_node
+
+    search_database_node - "decide" >> database_agent_node
     web_search_node - "decide" >> decide_action_node
     read_this_link_node - "decide" >> decide_action_node
     current_page_context_node - "decide" >> decide_action_node
