@@ -1,5 +1,6 @@
 import logging
 import pprint
+import time
 from datetime import datetime
 
 import yaml
@@ -140,7 +141,7 @@ Current Newsletters Page Link: {current_url}, Current Newsletters Page Context: 
     - search-web-query (str): What to search for on the internet
 
 [3] read-this-link
-  Description: Get the content from a specific link (if the user provides a specific link) Must pick if user specifies to read a link.
+  Description: Get the content from a specific link (if the user provides a specific link) Must pick if user specifies to read a link. If content of link is already in the current knowledge base, DO NOT read the link again.
   Parameters:
     - read-this-link-query (str): The url of the link to read the content from
 
@@ -392,7 +393,7 @@ class ReadThisLink(Node):
         # update progress queue
         if "progress_queue" in shared:
             shared["progress_queue"].put_nowait(
-                f"Reading the link {shared['read_this_link'][:100]}..."
+                f"Reading the link {shared['read_this_link'][:50]}..."
             )
         return {
             "read_this_link": shared["read_this_link"],
@@ -422,10 +423,11 @@ class ReadThisLink(Node):
         previous = shared.get("current_knowledge_base", "")
         shared["current_knowledge_base"] = (
             previous
-            + "\n\n(*) READ THIS LINK: "
+            + "\n\n(*) READ THIS LINK TOOL CALL RESULT: {"
             + shared["read_this_link"]
-            + "\nCONTENT: "
+            + "}\nLINK CONTENT: {"
             + read_res
+            + "}"
         )
         return "decide"
 
@@ -564,6 +566,13 @@ class DatabaseAgent(Node):
     def prep(self, shared):
         """Get the database search query from the shared store."""
         # Check if this is the first iteration
+        time.sleep(2)
+        # add to progress queue
+        if "progress_queue" in shared:
+            shared["progress_queue"].put_nowait(
+                "DatabaseAgent: Deciding the next action..."
+            )
+        logger.info("🤔 DatabaseAgent: Deciding the next action...")
         current_knowledge_base = shared.get("current_knowledge_base", "")
         is_first_iteration = not current_knowledge_base or (
             isinstance(current_knowledge_base, str)
@@ -596,12 +605,14 @@ class DatabaseAgent(Node):
             "current_knowledge_base": current_knowledge_base,
             "database_agent_decision": database_agent_decision,
             "is_first_iteration": is_first_iteration,
+            "user_question": shared["user_question"],
         }
 
     def exec(self, inputs):
         """Call the LLM to generate a search query for the database."""
         search_query = inputs["search_query"]
         current_knowledge_base = inputs["current_knowledge_base"]
+        user_question = inputs["user_question"]
         database_agent_decision = inputs["database_agent_decision"]
         is_first_iteration = inputs["is_first_iteration"]
         current_date = datetime.now().strftime("%Y-%m-%d")
@@ -611,6 +622,7 @@ You are a research assistant on Sumitup - a digital tech newsletter database.
 You are given a user question and a context of what is available to you. Reflect on the user question and the context to decide what to do next - using tools to get more information or answer the question.
 IMPORTANT: You are not limited to the current knowledge base: If the current knowledge base does not have enough information to answer the question, you should use the tools to get more information.
 Database Search Query: {search_query}
+User Question: {user_question}
 Previous search results: {current_knowledge_base}
 Current Date: {current_date}
 Previous Decision: {database_agent_decision}
@@ -660,7 +672,7 @@ Return your response in this format:
 
 ```yaml
 thinking: |
-    <your step-by-step reasoning process>
+    <your step-by-step reasoning process - Is the current knowledge base enough to answer the question? If not, use the tools to get more information.>
 action: search-database # OR answer-search-database
 reason: <why you chose this action>
 vector-search-query: <specific search query if action is search-database, if not needed, leave it blank>
@@ -748,23 +760,26 @@ class AnswerDatabaseSearch(Node):
                 "Crafting final answer from database research..."
             )
         return {
-            "search_query": shared["search_query"],
+            "user_question": shared["user_question"],
             "current_knowledge_base": shared["current_knowledge_base"],
         }
 
     def exec(self, inputs):
         """Call the LLM to generate a search query for the database."""
-        search_query = inputs["search_query"]
+        user_question = inputs["user_question"]
         current_knowledge_base = inputs["current_knowledge_base"]
         answer_instructions = open("prompts/answer_instructions.md", "r").read()
         prompt = f"""
         ### CONTEXT
-        User Question: {search_query}
+        User Question: {user_question}
         Previous Research: {current_knowledge_base}
 
         ## NEXT ACTION
         {answer_instructions}
         """
+        # save prompt to file
+        with open("prompts/answer_prompt.md", "w") as f:
+            f.write(prompt)
         response = call_llm(prompt)
         return response
 
