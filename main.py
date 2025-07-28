@@ -169,7 +169,7 @@ def main():
         "conversation_history": [],
         "current_url": "",
         "current_page_context": {},
-        "knowledge_base": "",
+        "current_knowledge_base": "",
         # "progress_queue": asyncio.Queue(),
     }
     logger.info(f"🤔 Processing question: {question}")

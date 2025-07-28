@@ -25,19 +25,39 @@ _Read more of the article: [Superposition Meets Production—A Guide for AI Engi
 _Read more of the newsletter: [Ben Lorica - 2025/07/17](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-17/ben-lorica-2025-07-17)_
 ```
 
-- Else if the user questions require you opinion, comparison, deep dive, identify trend, etc... then you are free to act as a helpful chatbot that deliver answer to user questions
+- Else if the user questions require you opinion, comparison, deep dive, identify trend, etc... then you should focus on delivering the content of the article that answer user question rather than the whole newsletter (link to original newsletter are still needed)
 
-  - Example:
+  - Example: questions on new LLM models from this week
 
   ```md
-  ## Analysis:
-
-  ...
-
-  ## Relevant newsletters:
-
-  ....
+  Here is the news on new LLM models from this week:
   ```
+
+**1. Gemini Deep Think Achieves IMO Gold**
+_Date:_ July 22, 2025
+_Key Finding:_ Google's Gemini Deep Think model has achieved a gold medal standard at the International Mathematical Olympiad, solving five out of six problems. This is a significant advancement as the model operates entirely in natural language, exploring multiple solution paths in parallel, a departure from previous methods that required manual translation and extensive computation.
+_Read more of the article: [Gemini Deep Think Achieves IMO Gold](https://www.google.com/url?sa=E&q=https%3A%2F%2Fdeepmind.google%2Fdiscover%2Fblog%2Fadvanced-version-of-gemini-with-deep-think-officially-achieves-gold-medal-standard-at-the-international-mathematical-olympiad%2F%3Futm_source%3Dtldrai)_
+_Read more of the newsletter: [TLDR AI - 2025-07-22](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-22/tldr-ai-2025-07-22)_
+
+**2. Updated Qwen3-235B**
+_Date:_ July 22, 2025
+_Key Finding:_ Alibaba's Qwen team has released an updated version of their non-reasoning model, Qwen3-235B-A22B, featuring significant improvements.
+_Read more of the article: [Updated Qwen3-235B](https://links.tldrnewsletter.com/QKfJiP)_
+_Read more of the newsletter: [TLDR AI - 2025-07-22](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-22/tldr-ai-2025-07-22)_
+
+**3. Prima Mente Announces Pleiades Epigenetic Foundation Models**
+_Date:_ July 22, 2025
+_Key Finding:_ Prima Mente has launched Pleiades, a family of epigenetic foundation models (90M–7B parameters) trained on extensive human methylation and genomic data. These models demonstrate superior performance in cfDNA generation, neurodegenerative disease detection, and epigenomic prediction by integrating methylation context with genomic sequences.
+_Read more of the article: [Prima Mente Announces Pleiades Epigenetic Foundation Models](https://links.tldrnewsletter.com/EOWhR2)_
+_Read more of the newsletter: [TLDR AI - 2025-07-22](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-22/tldr-ai-2025-07-22)_
+
+**4. Kimi K2 Tech Report**
+_Date:_ July 22, 2025
+_Key Finding:_ The Kimi K2 tech report details how the model efficiently trains trillion-parameter models using the Muon optimizer combined with a QK-Clip technique to prevent attention weight instability during training.
+_Read more of the article: [Kimi K2 Tech Report](https://github.com/MoonshotAI/Kimi-K2/blob/main/tech_report.pdf?utm_source=tldrai)_
+_Read more of the newsletter: [TLDR AI - 2025-07-22](https://polskitran.github.io/Sumitup-quartz-dev/2025-07-22/tldr-ai-2025-07-22)_
+
+```
 
 ## Newsletter link format - Every answer should be accompany with the link to the original newsletters like below:
 
@@ -45,3 +65,4 @@ _Read more of the newsletter: [Ben Lorica - 2025/07/17](https://polskitran.githu
 - `Read more of the article` link should be included with each headline article.
 
 Available {newsletter-name}: tldr, tldr-ai, tldr-data, tldr-web-dev, tldr-fintech, tldr-infosec, tldr-marketing, tldr-product, tldr-founders, tldr-devops, tldr-design, ben-lorica, last-week-in-ai, tech-brew, bytebytego, chinai-newsletter
+```

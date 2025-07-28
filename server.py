@@ -19,6 +19,13 @@ from pocketflow import Flow
 
 from config import settings
 from flow import create_support_bot_flow
+from utils.mongo_db import (
+    create_chat_session,
+    delete_chat_session,
+    get_all_chat_sessions_ids,
+    load_chat_session,
+    save_chat_session,
+)
 
 app = FastAPI()
 
@@ -83,16 +90,18 @@ def validate_and_sanitize_input(
 
 
 class ConnectionManager:
-    """Manages WebSocket connections and their associated conversational state."""
+    """Manages WebSocket connections, session IDs, and conversational state."""
 
     def __init__(self):
         self.active_connections: Dict[WebSocket, Dict] = {}
         self.flows: Dict[WebSocket, Flow] = {}
+        self.session_ids: Dict[WebSocket, str] = {}  # Track session ID per connection
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections[websocket] = {}
-        self.flows[websocket] = create_support_bot_flow()
+        self.flows[websocket] = None  # Will be set after session selection
+        self.session_ids[websocket] = None
         print("Client connected")
 
     def disconnect(self, websocket: WebSocket):
@@ -100,6 +109,8 @@ class ConnectionManager:
             del self.active_connections[websocket]
         if websocket in self.flows:
             del self.flows[websocket]
+        if websocket in self.session_ids:
+            del self.session_ids[websocket]
         print("Client disconnected")
 
     def get_shared_state(self, websocket: WebSocket) -> Dict:
@@ -111,14 +122,143 @@ class ConnectionManager:
     def get_flow(self, websocket: WebSocket) -> Flow:
         return self.flows.get(websocket)
 
+    def set_flow(self, websocket: WebSocket, flow: Flow):
+        self.flows[websocket] = flow
+
+    def get_session_id(self, websocket: WebSocket) -> str:
+        return self.session_ids.get(websocket)
+
+    def set_session_id(self, websocket: WebSocket, session_id: str):
+        self.session_ids[websocket] = session_id
+
 
 manager = ConnectionManager()
+
+
+def create_fresh_shared_state():
+    """Create a fresh shared state with properly isolated mutable objects."""
+    shared_state = settings.shared_store.copy()
+    shared_state["conversation_history"] = []  # Fresh conversation history
+    shared_state["current_page_context"] = {}  # Fresh page context
+    # Note: progress_queue will be created fresh for each request anyway
+    return shared_state
 
 
 @app.websocket("/api/ws/chat")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
+        # Step 1: Send all available chat session IDs to the frontend
+        session_ids = get_all_chat_sessions_ids() or []
+        await websocket.send_text(
+            json.dumps({"type": "session_list", "payload": session_ids})
+        )
+
+        # Step 2: Wait for frontend to select or create a session
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            msg_type = message.get("type")
+            payload = message.get("payload", {})
+
+            # if msg_type == "select_session":
+            #     session_id = payload.get("session_id")
+            #     chat_session = load_chat_session(session_id)
+            #     if not chat_session:
+            #         await websocket.send_text(
+            #             json.dumps({"type": "error", "payload": "Session not found."})
+            #         )
+            #         continue
+            #     shared_state = chat_session["chat_session_shared_store"]
+            #     manager.set_shared_state(websocket, shared_state)
+            #     manager.set_session_id(websocket, session_id)
+            #     manager.set_flow(websocket, create_support_bot_flow())
+            #     await websocket.send_text(
+            #         json.dumps({"type": "session_loaded", "payload": session_id})
+            #     )
+            #     break
+            if msg_type == "select_session":  # select existing session
+                session_id = payload.get("session_id")
+                chat_session = load_chat_session(session_id)
+                if not chat_session:
+                    await websocket.send_text(
+                        json.dumps({"type": "error", "payload": "Session not found."})
+                    )
+                    continue
+                shared_state = chat_session["chat_session_shared_store"]
+                conversation_history = shared_state.get("conversation_history", [])
+                manager.set_shared_state(websocket, shared_state)
+                manager.set_session_id(websocket, session_id)
+                manager.set_flow(websocket, create_support_bot_flow())
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "session_loaded",
+                            "payload": {
+                                "session_id": session_id,
+                                "conversation_history": conversation_history,
+                            },
+                        }
+                    )
+                )
+                break
+            elif msg_type == "create_session":  # create new session
+                # Start with a fresh shared store with properly isolated mutable objects
+                shared_state = create_fresh_shared_state()
+                session_id = create_chat_session(shared_state)
+                if not session_id:
+                    await websocket.send_text(
+                        json.dumps(
+                            {"type": "error", "payload": "Failed to create session."}
+                        )
+                    )
+                    continue
+                manager.set_shared_state(websocket, shared_state)
+                manager.set_session_id(websocket, session_id)
+                manager.set_flow(websocket, create_support_bot_flow())
+                await websocket.send_text(
+                    json.dumps({"type": "session_created", "payload": session_id})
+                )
+                break
+            elif msg_type == "delete_session":
+                session_id = payload.get("session_id")
+                if not session_id:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "payload": "Session ID is required for deletion.",
+                            }
+                        )
+                    )
+                    continue
+
+                delete_chat_session(session_id)
+                # Send updated session list
+                updated_session_ids = get_all_chat_sessions_ids() or []
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "session_deleted",
+                            "payload": {
+                                "deleted_session_id": session_id,
+                                "updated_session_list": updated_session_ids,
+                            },
+                        }
+                    )
+                )
+                continue
+            else:
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "error",
+                            "payload": "Please select, create, or delete a session.",
+                        }
+                    )
+                )
+
+        # Step 3: Main chat loop
         while True:
             print(
                 "\n========================================================START OF TURN========================================================\n"
@@ -129,6 +269,100 @@ async def websocket_endpoint(websocket: WebSocket):
             msg_type = message.get("type")
             payload = message.get("payload", {})
 
+            # Handle session switching in main loop
+            if msg_type == "select_session":
+                session_id = payload.get("session_id")
+                chat_session = load_chat_session(session_id)
+                if not chat_session:
+                    await websocket.send_text(
+                        json.dumps({"type": "error", "payload": "Session not found."})
+                    )
+                    continue
+                shared_state = chat_session["chat_session_shared_store"]
+                conversation_history = shared_state.get("conversation_history", [])
+                print(
+                    f"📥 Loaded session {session_id} with {len(conversation_history)} conversation turns (initial)"
+                )
+                for i, turn in enumerate(conversation_history):
+                    print(f"  Turn {i + 1}: {turn}")
+                manager.set_shared_state(websocket, shared_state)
+                manager.set_session_id(websocket, session_id)
+                manager.set_flow(websocket, create_support_bot_flow())
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "session_loaded",
+                            "payload": {
+                                "session_id": session_id,
+                                "conversation_history": conversation_history,
+                            },
+                        }
+                    )
+                )
+                continue
+            elif msg_type == "create_session":
+                # Start with a fresh shared store with properly isolated mutable objects
+                shared_state = create_fresh_shared_state()
+                session_id = create_chat_session(shared_state)
+                if not session_id:
+                    await websocket.send_text(
+                        json.dumps(
+                            {"type": "error", "payload": "Failed to create session."}
+                        )
+                    )
+                    continue
+                manager.set_shared_state(websocket, shared_state)
+                manager.set_session_id(websocket, session_id)
+                manager.set_flow(websocket, create_support_bot_flow())
+                await websocket.send_text(
+                    json.dumps({"type": "session_created", "payload": session_id})
+                )
+                continue
+            elif msg_type == "delete_session":
+                session_id_to_delete = payload.get("session_id")
+                if not session_id_to_delete:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "payload": "Session ID is required for deletion.",
+                            }
+                        )
+                    )
+                    continue
+
+                delete_chat_session(session_id_to_delete)
+                # Send updated session list
+                updated_session_ids = get_all_chat_sessions_ids() or []
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "session_deleted",
+                            "payload": {
+                                "deleted_session_id": session_id_to_delete,
+                                "updated_session_list": updated_session_ids,
+                            },
+                        }
+                    )
+                )
+
+                # If the deleted session was the current session, reset the connection
+                current_session_id = manager.get_session_id(websocket)
+                if current_session_id == session_id_to_delete:
+                    manager.set_shared_state(websocket, {})
+                    manager.set_session_id(websocket, None)
+                    manager.set_flow(websocket, None)
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "session_reset",
+                                "payload": "Current session was deleted. Please select a new session.",
+                            }
+                        )
+                    )
+                continue
+
+            # Handle regular chat messages
             try:
                 question = payload.get("question")
                 if not question:
@@ -142,65 +376,13 @@ async def websocket_endpoint(websocket: WebSocket):
 
             shared_state = manager.get_shared_state(websocket)
             support_bot_flow = manager.get_flow(websocket)
-            if msg_type == "start" or not shared_state:
-                # current_url = payload.get("current_url", "")
-                # shared_state["current_url"] = current_url
-                # extra_urls = payload.get("extra_urls", [])
-                # instruction = payload.get("instruction", "")
-                # load instruction from instruction.md
-                # instruction = (
-                #     "Current date: "
-                #     + datetime.now().strftime("%Y-%m-%d")
-                #     + "\n"
-                #     + open("instruction.md", "r", encoding="utf-8").read()
-                # )
-                # prefixes = payload.get("prefixes", [])
-
-                # # Limit extra_urls to maximum 10
-                # if len(extra_urls) > 10:
-                #     extra_urls = extra_urls[:10]
-
-                # # Limit prefixes to maximum 10
-                # if len(prefixes) > 10:
-                #     prefixes = prefixes[:10]
-
-                # # If current_url is empty, use the current page URL (this would be handled by frontend)
-                # # Combine current_url and extra_urls into start_urls, removing duplicates
-                # start_urls = []
-                # if current_url:
-                #     start_urls.append(current_url)
-                # start_urls.extend(extra_urls)
-
-                # # Remove duplicates while preserving order
-                # start_urls = list(dict.fromkeys(start_urls))
-
-                # if not start_urls:
-                #     await websocket.send_text(
-                #         json.dumps(
-                #             {
-                #                 "type": "error",
-                #                 "payload": "At least one URL (current or extra) is required.",
-                #             }
-                #         )
-                #     )
-                #     continue
-
-                # shared_state = {
-                #     "conversation_history": [],
-                #     "instruction": instruction,
-                #     "current_url": current_url,
-                #     "allowed_domains": prefixes,
-                #     "max_iterations": 5,
-                #     "max_pages": 50,
-                #     "content_max_chars": 10000,
-                #     "max_urls_per_iteration": 5,
-                #     "all_discovered_urls": start_urls.copy(),
-                #     "visited_urls": set(),
-                #     "url_content": {},
-                #     "url_graph": {},
-                #     "urls_to_process": list(range(len(start_urls))),
-                # }
-                shared_state.update(settings.shared_store)
+            session_id = manager.get_session_id(websocket)
+            if not shared_state:
+                # This should not happen in normal flow since session selection should have created it
+                print("⚠️  Warning: No shared state found, creating fresh state")
+                shared_state = create_fresh_shared_state()
+                manager.set_shared_state(websocket, shared_state)
+            # Note: Removed msg_type == "start" condition to prevent conversation history loss
             # get current url from payload
             current_url = payload.get("current_url", "")
             shared_state["current_url"] = current_url
@@ -210,9 +392,15 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # append user messages
             shared_state["user_question"] = question
+            # Ensure conversation_history exists and append new user question
+            if "conversation_history" not in shared_state:
+                shared_state["conversation_history"] = []
             shared_state["conversation_history"].append({"user": question})
-            # shared_state["current_iteration"] = 0
-            # shared_state["final_answer"] = None
+
+            # Debug: Print current conversation history length
+            # print(
+            #     f"💬 Conversation history before flow: {len(shared_state.get('conversation_history', []))} items"
+            # )
 
             q = asyncio.Queue()
             shared_state["progress_queue"] = q
@@ -220,8 +408,6 @@ async def websocket_endpoint(websocket: WebSocket):
             def run_sync_flow_in_thread():
                 try:
                     support_bot_flow.run(shared_state)
-                    # final_answer = shared_state.get("final_answer")
-                    # {"bot": "answer"}
                     final_answer = shared_state.get("conversation_history")[-1].get(
                         "bot"
                     )
@@ -232,15 +418,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         "========================================================END OF TURN========================================================\n\n"
                     )
                     if final_answer:
-                        # useful_indices = shared_state.get("useful_visited_indices", [])
-                        # useful_pages = [
-                        #     shared_state["all_discovered_urls"][idx]
-                        #     for idx in useful_indices
-                        #     if idx < len(shared_state["all_discovered_urls"])
-                        # ]
                         answer_data = {
                             "answer": final_answer,
-                            # "useful_pages": useful_pages,
                         }
                         q.put_nowait(f"FINAL_ANSWER:::{json.dumps(answer_data)}")
                     else:
@@ -270,7 +449,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     event_data = {
                         "type": "final_answer",
                         "payload": answer_data["answer"],
-                        # "useful_pages": answer_data["useful_pages"],
                     }
                 elif progress_msg.startswith("ERROR:::"):
                     event_data = {
@@ -281,43 +459,24 @@ async def websocket_endpoint(websocket: WebSocket):
                     event_data = {"type": "progress", "payload": progress_msg}
                 await websocket.send_text(json.dumps(event_data))
 
-            # if shared_state.get("final_answer"):
-            #     shared_state["conversation_history"].append(
-            #         {
-            #             "user": shared_state["user_question"],
-            #             "bot": shared_state["final_answer"],
-            #         }
-            #     )
-            # shared_state["urls_to_process"] = []
+            # Debug: Print conversation history after flow
+            # print(
+            #     f"💬 Conversation history after flow: {len(shared_state.get('conversation_history', []))} items"
+            # )
+            # for i, turn in enumerate(shared_state.get("conversation_history", [])):
+            #     print(f"  Turn {i + 1}: {turn}")
+
+            # Save chat session after each turn
+            if session_id:
+                save_chat_session(session_id, shared_state)
+                # print(
+                #     f"💾 Saved session {session_id} with {len(shared_state.get('conversation_history', []))} conversation turns"
+                # )
 
             manager.set_shared_state(websocket, shared_state)
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-
-
-# @app.websocket("/api/ws/chat")
-# async def websocket_endpoint(websocket: WebSocket):
-#     # connect to the websocket
-#     await manager.connect(websocket)
-
-#     # Initialize conversation history for this connection
-#     shared_store = {"websocket": websocket, "conversation_history": []}
-
-#     try:
-#         while True:
-#             data = await websocket.receive_text()
-#             message = json.loads(data)
-
-#             # Update only the current message, keep conversation history
-#             shared_store["user_message"] = message.get("content", "")
-
-#             flow = create_support_bot_flow()
-#             await flow.run_async(shared_store)
-
-#     except WebSocketDisconnect:
-#         # disconnect from the websocket
-#         manager.disconnect(websocket)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # Google Gemini
     google_gemini_genai_api_token: str
-    google_gemini_genai_model: str = "gemini-2.5-flash-lite-preview-06-17"
+    google_gemini_genai_model: str = "gemini-2.5-flash"
     google_gemini_embedding_model: str = "gemini-embedding-exp-03-07"
     google_gemini_genai_model_backup: str = "gemini-2.5-flash"
     google_gemini_genai_cleanup_prompt_path: str = (
@@ -19,6 +19,7 @@ class Settings(BaseSettings):
         task_type="RETRIEVAL_DOCUMENT",
         output_dimensionality=3072,
     )
+    google_gemini_text_to_speech_model: str = "gemini-2.5-flash-preview-tts"
 
     # ChromaDB
     chromadb_api_key: str
@@ -30,6 +31,7 @@ class Settings(BaseSettings):
     mongodb_uri: str
     mongodb_database: str = "sumitup-dev"
     mongodb_collection_name: str = "newsletters"
+    mongodb_chat_session_collection_name: str = "chat_sessions"
 
     # Tavily search
     tavily_search_api_key: str
@@ -55,7 +57,7 @@ class Settings(BaseSettings):
         "conversation_history": [],
         "user_question": "",
         "search_query": "",
-        "knowledge_base": "",
+        "current_knowledge_base": "",
         "progress_queue": asyncio.Queue(),
         "current_url": "",
         "current_page_context": {},

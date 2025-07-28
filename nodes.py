@@ -33,9 +33,13 @@ console_handler.setFormatter(formatter)
 if not logger.hasHandlers():
     logger.addHandler(console_handler)
 
+# ==============================================================
+# AGENTS
+# ==============================================================
+
 
 # ------------------------------
-# DecideAction
+# DecideAction Agent
 # ------------------------------
 class DecideAction(Node):
     def prep(self, shared):
@@ -66,7 +70,7 @@ class DecideAction(Node):
         instruction = shared["instruction"]
         conversation_history = shared.get("conversation_history", [])
         current_url = shared.get("current_url", "")
-        current_page_context = shared.get("current_page_context", {})
+        current_page_context = shared.get("current_page_context", {}) or ""
         read_this_link = shared.get("read_this_link", "")
 
         # Handle agent decision context
@@ -102,7 +106,7 @@ class DecideAction(Node):
         instruction = inputs["instruction"]
         conversation_history = inputs["conversation_history"]
         current_url = inputs["current_url"]
-        current_page_context = inputs["current_page_context"]
+        current_page_context = str({current_url: inputs["current_page_context"]})
         is_first_iteration = inputs["is_first_iteration"]
 
         # Format conversation history for the prompt
@@ -120,14 +124,15 @@ class DecideAction(Node):
 ### CONTEXT
 You are a research assistant on Sumitup - a digital tech newsletter database. 
 You are given a user question and a context of what is available to you. Reflect on the user question and the context to decide what to do next - using tools to get more information or answer the question.
+Always default to searching the database if you are unsure if the current knowledge is enough to satisfy the user's newsletters inquiry.
 IMPORTANT: You are not limited to the current knowledge base: If the current knowledge base does not have enough information to answer the question, you should use the tools to get more information.
 
 {"**FIRST ITERATION: This is the initial search for this question.**" if is_first_iteration else ""}
 
-Instruction: {instruction}
+Guidelines: {instruction}
 Question: {user_question}
+Current Newsletters Page: {current_page_context}
 Current Knowledge Base: {current_knowledge_base}
-Current Newsletters Page Link: {current_url}, Current Newsletters Page Context: {current_page_context}
 
 ### ACTION SPACE
 [1] search-database
@@ -141,12 +146,12 @@ Current Newsletters Page Link: {current_url}, Current Newsletters Page Context: 
     - search-web-query (str): What to search for on the internet
 
 [3] read-this-link
-  Description: Get the content from a specific link (if the user provides a specific link) Must pick if user specifies to read a link. If content of link is already in the current knowledge base, DO NOT read the link again.
+  Description: Get the content from a user provided specific link (Must pick if user specifies to read a link). If content of link is already in the current knowledge base, DO NOT read the link again.
   Parameters:
     - read-this-link-query (str): The url of the link to read the content from
 
 [4] read-current-page
-  Description: Get the content from the current page (if the user asks about the current page)
+  Description: Get the content from the current newsletter page (Must pick if user asks about the current newsletter page content. e.g. "Overview of the current newsletter page?")
   Parameters:
     - read-current-page-url (str): The url of the current page
 
@@ -160,15 +165,14 @@ Decide the next action based on the context and available actions.
 Return your response in this format:
 
 ```yaml
-thinking: |
+thinking:  |
     <your step-by-step reasoning process>
-action: search-database # OR search-web OR read-this-link OR read-current-page OR answer
+action: <search-database | search-web | read-this-link | read-current-page | answer>
 reason: <why you chose this action>
 search-database-query: <specific search query if action is search-database>
 search-web-query: <specific search query if action is search-web>
 read-this-link-query: <specific url if action is read-this-link>
 read-current-page-url: <specific url if action is read-current-page>
-answer: <if action is answer>
 ```
 IMPORTANT: Make sure to:
 1. Use proper indentation (4 spaces) for all multi-line fields
@@ -178,6 +182,11 @@ IMPORTANT: Make sure to:
 
         # Call the LLM to make a decision
         response = call_llm(prompt)
+        # debug print
+        print("\n\n--------------------------------")
+        print("(*) DecideAction Response:")
+        print(response)
+        print("--------------------------------\n\n")
 
         # Parse the response to get the decision
         try:
@@ -262,7 +271,206 @@ IMPORTANT: Make sure to:
 
 
 # ------------------------------
-# SearchDatabase
+# DatabaseAgent
+# ------------------------------
+class DatabaseAgent(Node):
+    def prep(self, shared):
+        """Get the database search query from the shared store."""
+        # Check if this is the first iteration
+        time.sleep(2)
+        # add to progress queue
+        if "progress_queue" in shared:
+            shared["progress_queue"].put_nowait(
+                "DatabaseAgent: Deciding the next action..."
+            )
+        logger.info("🤔 DatabaseAgent: Deciding the next action...")
+        current_knowledge_base = shared.get("current_knowledge_base", "")
+        is_first_iteration = not current_knowledge_base or (
+            isinstance(current_knowledge_base, str)
+            and current_knowledge_base.strip() == ""
+        )
+
+        if is_first_iteration:
+            current_knowledge_base = (
+                "FIRST ITERATION: No previous research has been conducted yet."
+            )
+        # else:
+        #     # Check if the knowledge base contains error messages that might confuse the agent
+        #     if isinstance(current_knowledge_base, str) and (
+        #         "NOT_FOUND" in current_knowledge_base
+        #         or "No documents found" in current_knowledge_base
+        #     ):
+        #         current_knowledge_base = (
+        #             "FIRST ITERATION: No previous research has been conducted yet."
+        #         )
+
+        database_agent_decision = shared.get("database_agent_decision", "")
+        if not database_agent_decision or (
+            isinstance(database_agent_decision, str)
+            and database_agent_decision.strip() == ""
+        ):
+            database_agent_decision = "FIRST ITERATION: This is the initial database search for this question."
+
+        return {
+            "search_query": shared["search_query"],
+            "current_knowledge_base": current_knowledge_base,
+            "database_agent_decision": database_agent_decision,
+            "is_first_iteration": is_first_iteration,
+            "user_question": shared["user_question"],
+        }
+
+    def exec(self, inputs):
+        """Call the LLM to generate a search query for the database."""
+        search_query = inputs["search_query"]
+        current_knowledge_base = inputs["current_knowledge_base"]
+        user_question = inputs["user_question"]
+        database_agent_decision = inputs["database_agent_decision"]
+        is_first_iteration = inputs["is_first_iteration"]
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        prompt = f"""
+### CONTEXT
+You are a research assistant on Sumitup - a digital tech newsletter database. 
+You are given a user question and a context of what is available to you. Reflect on the user question and the context to decide what to do next - using tools to get more information or answer the question.
+IMPORTANT: You are not limited to the current knowledge base: If the current knowledge base does not have enough information to answer the question, you should use the tools to get more information.
+Database Search Query: {search_query}
+User Question: {user_question}
+Previous search results: {current_knowledge_base}
+Current Date: {current_date}
+Previous Decision: {database_agent_decision}
+
+- Currently available newsletter sender in the database:
+  - TLDR AI
+  - TLDR
+  - TLDR Web Dev
+  - TLDR Product
+  - TLDR Founders
+  - TLDR Data
+  - TLDR Fintech
+  - TLDR Marketing
+  - TLDR Design
+  - TLDR Crypto
+  - TLDR InfoSec
+  - TLDR DevOps
+  - Ben Lorica
+  - ByteByteGo
+  - Last Week in AI
+  - ChinAI Newsletter
+  - Tech Brew
+
+
+{"**FIRST ITERATION: This is the initial database search for this question.**" if is_first_iteration else ""}
+
+### ACTION SPACE
+[1] search-database
+  Description: Look up more information on the newsletters database
+  Parameters:
+    - vector-search-query (str): Natural language query for semantic search. To performs a semantic search using vector embeddings to find newsletters with conceptually similar content. Use for broad, thematic, or vague queries where exact keywords may not match (e.g., "emerging AI technologies" or "trends similar to generative AI"). (OPTIONAL)
+    - sender-name (str): The newsletter sender name (optional)
+    - start-date (str): The start date of search (optional)
+    - end-date (str): The end date of search (optional)
+
+[2] answer-search-database
+  Description: Answer the question based on the database search results if search results are relevant to the question.
+
+## YOUR DECISION:
+Decide the next action based on the context and available actions. If result return empty, Simply report so along with the search query used. 
+Note: Put same start and end date for exact date search. Assume year is current year. Assume week start on monday.
+IMPORTANT: Only use vector-search-query if user question is asking about a specific topic, keywords else if the user questions only contain sender name and date do not use vector-search-query.
+
+{"**IMPORTANT: Since this is the first iteration, you should start with search-database unless you have enough information to answer directly.**" if is_first_iteration else ""}
+
+Return your response in this format:
+
+```yaml
+thinking: |
+    <your step-by-step reasoning process - Is the current knowledge base enough to answer the question? If not, use the tools to get more information.>
+action: <search-database | answer-search-database>
+reason: <why you chose this action>
+vector-search-query: <specific search query if action is search-database, if not needed, leave it blank>
+start-date: <start date string (YYYY-MM-DD) if action is search-database, if not specified, leave it blank>
+end-date: <end date string (YYYY-MM-DD) if action is search-database, if not specified, leave it blank>
+sender-name: <sender name if action is search-database, if not specified, leave it blank>
+```
+
+IMPORTANT: Make sure to:
+1. Use proper indentation (4 spaces) for all multi-line fields
+2. Use the | character for multi-line text fields
+3. Keep single-line fields without the | character
+4. DO NOT use quotes around values (e.g., use: sender-name: TLDR Data, NOT "TLDR Data")
+5. For dates, use YYYY-MM-DD format (e.g., 2025-07-13)
+6. For sender names, use exact names like TLDR AI, TLDR Data, etc.
+        """
+        response = call_llm(prompt)
+        # debug print
+        print("\n\n--------------------------------")
+        print("(*) DatabaseAgent Response:")
+        print(response)
+        print("--------------------------------\n\n")
+        # Parse the response to get the decision
+        try:
+            if "```yaml" in response:
+                yaml_str = response.split("```yaml")[1].split("```")[0].strip()
+            elif "```" in response:
+                yaml_str = response.split("```")[1].split("```")[0].strip()
+            else:
+                yaml_str = response.strip()
+
+            # Clean up common YAML issues
+            yaml_str = yaml_str.replace('"', "").replace("'", "")  # Remove quotes
+            yaml_str = yaml_str.replace("...", "")  # Remove ellipsis
+
+            decision = yaml.safe_load(yaml_str)
+
+            # Validate the decision structure
+            if not isinstance(decision, dict):
+                raise ValueError("Decision must be a dictionary")
+
+            required_fields = ["action"]  # "reason"
+            for field in required_fields:
+                if field not in decision:
+                    raise ValueError(f"Missing required field: {field}")
+
+            return decision
+
+        except Exception as e:
+            logger.error(f"Error parsing LLM response: {e}")
+            logger.error(f"Raw response: {response}")
+            raise e
+
+    def exec_fallback(self, prep_res, exc):
+        """Fallback when generating DatabaseAgent decision fails."""
+        logger.error(f"Error generating DatabaseAgent decision: {exc}")
+        return "Error generating DatabaseAgent decision: " + str(exc)
+
+    def post(self, shared, prep_res, exec_res):
+        """Save the decision and determine the next step in the flow."""
+        # save the decision
+        shared["database_agent_decision"] = exec_res
+        # save the search query
+        if exec_res["action"] == "search-database":
+            # save the database search query
+            shared["search-database-query"] = {
+                "vector-search-query": exec_res.get("vector-search-query", "") or "",
+                "sender-name": exec_res.get("sender-name", "") or "",
+                "start-date": str(exec_res.get("start-date", "")) or "",
+                "end-date": str(exec_res.get("end-date", "")) or "",
+            }
+            logger.info(
+                f"🔍 Agent decided to search database: {shared['search-database-query']}"
+            )
+            return "search-database"
+        else:
+            # ready to answer the database search question
+            return "answer-search-database"
+
+
+# ==============================================================
+# TOOLS
+# ==============================================================
+
+
+# ------------------------------
+# SearchDatabase Tool
 # ------------------------------
 class SearchDatabase(Node):
     def prep(self, shared):
@@ -282,7 +490,11 @@ class SearchDatabase(Node):
         sender = search_database_query["sender-name"] or ""
         start_date = search_database_query["start-date"] or ""
         end_date = search_database_query["end-date"] or ""
-        pprint.pprint(search_database_query)
+        # debug print
+        # print("\n\n--------------------------------")
+        # print("(*) SearchDatabase Query:")
+        # pprint.pprint(search_database_query)
+        # print("--------------------------------\n\n")
         query = build_dynamic_query(
             sender_name=sender, start_date=start_date, end_date=end_date
         )
@@ -481,6 +693,11 @@ class ReadCurrentPage(Node):
         return "decide"
 
 
+# ==============================================================
+# ANSWERS AGENTS
+# ==============================================================
+
+
 # ------------------------------
 # AnswerQuestion
 # ------------------------------
@@ -500,6 +717,7 @@ class AnswerQuestion(Node):
             "conversation_history": shared.get("conversation_history", []),
             "current_page_context": shared.get("current_page_context", ""),
             "current_url": shared.get("current_url", ""),
+            "agent_decision": shared.get("agent_decision", ""),
         }
 
     def exec(self, inputs):
@@ -508,9 +726,11 @@ class AnswerQuestion(Node):
         current_knowledge_base = inputs["current_knowledge_base"]
         instruction = inputs["instruction"]
         conversation_history = inputs["conversation_history"]
-        current_page_context = inputs["current_page_context"]
+        current_page_context = str(
+            {inputs["current_url"]: inputs["current_page_context"]}
+        )
         current_url = inputs["current_url"]
-
+        agent_decision = inputs["agent_decision"]
         logger.info("✍️ Crafting final answer...")
 
         # Create a prompt for the LLM to answer the question
@@ -520,16 +740,16 @@ Based on the following information, answer the question.
 Question: {user_question}
 Research: {current_knowledge_base}
 Conversation History: {conversation_history}
-Current Page Context: {current_page_context[current_url]}
+Current Newsletter Page Context: {current_page_context}
+Previous agent decision: {agent_decision}
 
 ### INSTRUCTION
 {instruction}
 
 ## YOUR ANSWER:
 Provide a comprehensive answer using the research results. IMPORTANT:
-- Use the research results to answer the question.
+- Use the research results and current newsletter page context to answer the question.
 - If the research results are not relevant to the question, say so.
-- If the research results are not enough to answer the question, say so.
 - If the research results are not enough to answer the question, say so.
 - Must include the source of the information in the answer in the format:
 """
@@ -542,7 +762,7 @@ Provide a comprehensive answer using the research results. IMPORTANT:
     def exec_fallback(self, prep_res, exc):
         """Fallback when answer generation fails."""
         logger.error(f"Error generating answer: {exc}")
-        return "decide"
+        return "Error generating answer: " + exc
 
     def post(self, shared, prep_res, exec_res):
         """Save the final answer and complete the flow."""
@@ -560,195 +780,6 @@ Provide a comprehensive answer using the research results. IMPORTANT:
 
 
 # ------------------------------
-# DatabaseAgent
-# ------------------------------
-class DatabaseAgent(Node):
-    def prep(self, shared):
-        """Get the database search query from the shared store."""
-        # Check if this is the first iteration
-        time.sleep(2)
-        # add to progress queue
-        if "progress_queue" in shared:
-            shared["progress_queue"].put_nowait(
-                "DatabaseAgent: Deciding the next action..."
-            )
-        logger.info("🤔 DatabaseAgent: Deciding the next action...")
-        current_knowledge_base = shared.get("current_knowledge_base", "")
-        is_first_iteration = not current_knowledge_base or (
-            isinstance(current_knowledge_base, str)
-            and current_knowledge_base.strip() == ""
-        )
-
-        if is_first_iteration:
-            current_knowledge_base = (
-                "FIRST ITERATION: No previous research has been conducted yet."
-            )
-        else:
-            # Check if the knowledge base contains error messages that might confuse the agent
-            if isinstance(current_knowledge_base, str) and (
-                "NOT_FOUND" in current_knowledge_base
-                or "No documents found" in current_knowledge_base
-            ):
-                current_knowledge_base = (
-                    "FIRST ITERATION: No previous research has been conducted yet."
-                )
-
-        database_agent_decision = shared.get("database_agent_decision", "")
-        if not database_agent_decision or (
-            isinstance(database_agent_decision, str)
-            and database_agent_decision.strip() == ""
-        ):
-            database_agent_decision = "FIRST ITERATION: This is the initial database search for this question."
-
-        return {
-            "search_query": shared["search_query"],
-            "current_knowledge_base": current_knowledge_base,
-            "database_agent_decision": database_agent_decision,
-            "is_first_iteration": is_first_iteration,
-            "user_question": shared["user_question"],
-        }
-
-    def exec(self, inputs):
-        """Call the LLM to generate a search query for the database."""
-        search_query = inputs["search_query"]
-        current_knowledge_base = inputs["current_knowledge_base"]
-        user_question = inputs["user_question"]
-        database_agent_decision = inputs["database_agent_decision"]
-        is_first_iteration = inputs["is_first_iteration"]
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        prompt = f"""
-### CONTEXT
-You are a research assistant on Sumitup - a digital tech newsletter database. 
-You are given a user question and a context of what is available to you. Reflect on the user question and the context to decide what to do next - using tools to get more information or answer the question.
-IMPORTANT: You are not limited to the current knowledge base: If the current knowledge base does not have enough information to answer the question, you should use the tools to get more information.
-Database Search Query: {search_query}
-User Question: {user_question}
-Previous search results: {current_knowledge_base}
-Current Date: {current_date}
-Previous Decision: {database_agent_decision}
-
-- Currently available newsletter sender in the database:
-  - TLDR AI
-  - TLDR
-  - TLDR Web Dev
-  - TLDR Product
-  - TLDR Founders
-  - TLDR Data
-  - TLDR Fintech
-  - TLDR Marketing
-  - TLDR Design
-  - TLDR Crypto
-  - TLDR InfoSec
-  - TLDR DevOps
-  - Ben Lorica
-  - ByteByteGo
-  - Last Week in AI
-  - ChinAI Newsletter
-  - Tech Brew
-
-
-{"**FIRST ITERATION: This is the initial database search for this question.**" if is_first_iteration else ""}
-
-### ACTION SPACE
-[1] search-database
-  Description: Look up more information on the newsletters database
-  Parameters:
-    - vector-search-query (str): Natural language query for semantic search. To performs a semantic search using vector embeddings to find newsletters with conceptually similar content. Use for broad, thematic, or vague queries where exact keywords may not match (e.g., "emerging AI technologies" or "trends similar to generative AI"). (OPTIONAL)
-    - sender-name (str): The newsletter sender name (optional)
-    - start-date (str): The start date of search (optional)
-    - end-date (str): The end date of search (optional)
-
-[2] answer-search-database
-  Description: Answer the question based on the database search results if search results are relevant to the question.
-
-## YOUR DECISION:
-Decide the next action based on the context and available actions. If result return empty, Simply report so along with the search query used. 
-Note: Put same start and end date for exact date search. Assume year is current year. Assume week start on monday.
-IMPORTANT: Only use vector-search-query if user question is asking about a specific topic, keywords else if the user questions only contain sender name and date do not use vector-search-query.
-
-{"**IMPORTANT: Since this is the first iteration, you should start with search-database unless you have enough information to answer directly.**" if is_first_iteration else ""}
-
-Return your response in this format:
-
-```yaml
-thinking: |
-    <your step-by-step reasoning process - Is the current knowledge base enough to answer the question? If not, use the tools to get more information.>
-action: search-database # OR answer-search-database
-reason: <why you chose this action>
-vector-search-query: <specific search query if action is search-database, if not needed, leave it blank>
-start-date: <start date string (YYYY-MM-DD) if action is search-database, if not specified, leave it blank>
-end-date: <end date string (YYYY-MM-DD) if action is search-database, if not specified, leave it blank>
-sender-name: <sender name if action is search-database, if not specified, leave it blank>
-```
-
-IMPORTANT: Make sure to:
-1. Use proper indentation (4 spaces) for all multi-line fields
-2. Use the | character for multi-line text fields
-3. Keep single-line fields without the | character
-4. DO NOT use quotes around values (e.g., use: sender-name: TLDR Data, NOT "TLDR Data")
-5. For dates, use YYYY-MM-DD format (e.g., 2025-07-13)
-6. For sender names, use exact names like TLDR AI, TLDR Data, etc.
-        """
-        response = call_llm(prompt)
-        # Parse the response to get the decision
-        try:
-            if "```yaml" in response:
-                yaml_str = response.split("```yaml")[1].split("```")[0].strip()
-            elif "```" in response:
-                yaml_str = response.split("```")[1].split("```")[0].strip()
-            else:
-                yaml_str = response.strip()
-
-            # Clean up common YAML issues
-            yaml_str = yaml_str.replace('"', "").replace("'", "")  # Remove quotes
-            yaml_str = yaml_str.replace("...", "")  # Remove ellipsis
-
-            decision = yaml.safe_load(yaml_str)
-
-            # Validate the decision structure
-            if not isinstance(decision, dict):
-                raise ValueError("Decision must be a dictionary")
-
-            required_fields = ["action"]  # "reason"
-            for field in required_fields:
-                if field not in decision:
-                    raise ValueError(f"Missing required field: {field}")
-
-            return decision
-
-        except Exception as e:
-            logger.error(f"Error parsing LLM response: {e}")
-            logger.error(f"Raw response: {response}")
-            raise e
-
-    def exec_fallback(self, prep_res, exc):
-        """Fallback when generating DatabaseAgent decision fails."""
-        logger.error(f"Error generating DatabaseAgent decision: {exc}")
-        return "Error generating DatabaseAgent decision: " + exc
-
-    def post(self, shared, prep_res, exec_res):
-        """Save the decision and determine the next step in the flow."""
-        # save the decision
-        shared["database_agent_decision"] = exec_res
-        # save the search query
-        if exec_res["action"] == "search-database":
-            # save the database search query
-            shared["search-database-query"] = {
-                "vector-search-query": exec_res.get("vector-search-query", "") or "",
-                "sender-name": exec_res.get("sender-name", "") or "",
-                "start-date": str(exec_res.get("start-date", "")) or "",
-                "end-date": str(exec_res.get("end-date", "")) or "",
-            }
-            logger.info(
-                f"🔍 Agent decided to search database: {shared['search-database-query']}"
-            )
-            return "search-database"
-        else:
-            # ready to answer the database search question
-            return "answer-search-database"
-
-
-# ------------------------------
 # AnswerDatabaseSearch
 # ------------------------------
 class AnswerDatabaseSearch(Node):
@@ -760,19 +791,22 @@ class AnswerDatabaseSearch(Node):
                 "Crafting final answer from database research..."
             )
         return {
-            "user_question": shared["user_question"],
-            "current_knowledge_base": shared["current_knowledge_base"],
+            "user_question": shared.get("user_question", ""),
+            "current_knowledge_base": shared.get("current_knowledge_base", ""),
+            "database_agent_decision": shared.get("database_agent_decision", ""),
         }
 
     def exec(self, inputs):
         """Call the LLM to generate a search query for the database."""
         user_question = inputs["user_question"]
         current_knowledge_base = inputs["current_knowledge_base"]
+        database_agent_decision = inputs["database_agent_decision"]
         answer_instructions = open("prompts/answer_instructions.md", "r").read()
         prompt = f"""
         ### CONTEXT
         User Question: {user_question}
         Previous Research: {current_knowledge_base}
+        Database Agent Decision: {database_agent_decision}
 
         ## NEXT ACTION
         {answer_instructions}

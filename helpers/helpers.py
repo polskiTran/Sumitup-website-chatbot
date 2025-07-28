@@ -1,3 +1,4 @@
+import wave
 from datetime import datetime, timedelta
 from pprint import pprint
 from typing import Any, Dict, List, Optional, Union
@@ -66,6 +67,15 @@ def build_dynamic_query(
 
     pprint(query)
     return query
+
+
+# Set up the wave file to save the output:
+def wave_file(filename, pcm, channels=1, rate=24000, sample_width=2):
+    with wave.open(filename, "wb") as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(sample_width)
+        wf.setframerate(rate)
+        wf.writeframes(pcm)
 
 
 if __name__ == "__main__":
