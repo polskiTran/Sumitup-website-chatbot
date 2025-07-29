@@ -30,7 +30,7 @@ from utils.mongo_db import (
 app = FastAPI()
 
 # Mount static files (HTML, CSS, JS)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 def validate_and_sanitize_input(
