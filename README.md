@@ -1,6 +1,6 @@
 # Sumitup AI Assistant
 
-**Assistant agent for Sumitup** - Digital tech newsletter garden ([Database and Backend](https://github.com/polskiTran/EEP25-Sumitup), [Sumitup web client](https://github.com/polskiTran/Sumitup-quartz-dev)). Built based on [Pocketflow AI Agent framework](https://github.com/The-Pocket/PocketFlow/tree/main/cookbook/pocketflow-tracing).
+**Assistant agent for [Sumitup](https://github.com/polskiTran/EEP25-Sumitup)** - Digital tech newsletter garden, [Sumitup web client](https://github.com/polskiTran/Sumitup-quartz-dev)). Built based on [Pocketflow AI Agent framework](https://github.com/The-Pocket/PocketFlow/tree/main/cookbook/pocketflow-tracing).
 
 **Sumitup - Web Client** https://sumitup.dev/ ![](assets/sumitup-web-client.png)
 
